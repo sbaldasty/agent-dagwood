@@ -5,6 +5,7 @@ Minimal mixed-language workspace for trying DAG-based workflows in Python and R.
 ## Project layout
 
 - `main.py`: Python entrypoint (kept simple for now)
+- `scripts/add_numbers.py`: Tool implementation for the function-calling demo
 - `pyproject.toml`: Python package metadata and dependencies
 - `r/scripts/dwcli.R`: Minimal DAGWOOD example script in R
 - `r/README.md`: R environment setup and run instructions

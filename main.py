@@ -1,7 +1,10 @@
 import argparse
 import json
 import os
+import subprocess
+import sys
 import time
+from pathlib import Path
 from typing import Any
 
 from litellm import completion
@@ -26,37 +29,53 @@ TOOL_SPECS = [
 ]
 
 
-def _default_model() -> str:
-    return os.getenv("MODEL", "ollama/qwen2.5:7b-instruct")
-
-
-def _ollama_base_url() -> str:
-    return os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-
-
 def _request_overrides(model: str) -> dict[str, Any]:
     overrides: dict[str, Any] = {}
     if model.startswith("ollama/"):
-        overrides["api_base"] = _ollama_base_url()
+        overrides["api_base"] = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     if os.getenv("LITELLM_API_KEY"):
         overrides["api_key"] = os.environ["LITELLM_API_KEY"]
     return overrides
 
 
 def _parse_models(model_arg: str | None) -> list[str]:
-    source = model_arg or os.getenv("MODELS") or _default_model()
+    source = model_arg or os.getenv("MODEL", "ollama/qwen2.5:7b-instruct")
     return [m.strip() for m in source.split(",") if m.strip()]
 
 
-def _tool_add_numbers(arguments: dict[str, Any]) -> dict[str, Any]:
-    a = float(arguments["a"])
-    b = float(arguments["b"])
-    return {"sum": a + b}
+def _tool_script_path(name: str) -> Path:
+    return Path(__file__).resolve().parent / "scripts" / f"{name}.py"
+
+
+def _run_tool_script(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    script_path = _tool_script_path(name)
+    if not script_path.exists():
+        return {"error": f"Tool script not found: {script_path}"}
+
+    completed = subprocess.run(
+        [sys.executable, str(script_path)],
+        input=json.dumps(arguments),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        stderr = completed.stderr.strip() or "tool script failed"
+        return {"error": stderr}
+
+    try:
+        payload = json.loads(completed.stdout)
+    except json.JSONDecodeError as exc:
+        return {"error": f"Invalid JSON from tool script: {exc}"}
+
+    if not isinstance(payload, dict):
+        return {"error": "Tool script must return a JSON object"}
+    return payload
 
 
 def _run_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
     if name == "add_numbers":
-        return _tool_add_numbers(arguments)
+        return _run_tool_script(name, arguments)
     return {"error": f"Unknown tool: {name}"}
 
 
