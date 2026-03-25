@@ -57,20 +57,13 @@ def _run_tool_script(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         input=json.dumps(arguments),
         capture_output=True,
         text=True,
-        check=False,
-    )
+        check=False)
+
     if completed.returncode != 0:
         stderr = completed.stderr.strip() or "tool script failed"
         return {"error": stderr}
 
-    try:
-        payload = json.loads(completed.stdout)
-    except json.JSONDecodeError as exc:
-        return {"error": f"Invalid JSON from tool script: {exc}"}
-
-    if not isinstance(payload, dict):
-        return {"error": "Tool script must return a JSON object"}
-    return payload
+    return json.loads(completed.stdout)
 
 
 def _run_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
@@ -196,41 +189,29 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             "Comma-separated LiteLLM model names. "
-            "Examples: ollama/qwen2.5:7b-instruct,openai/gpt-4o-mini"
-        ),
-    )
+            "Examples: ollama/qwen2.5:7b-instruct,openai/gpt-4o-mini"))
     parser.add_argument("--temperature", type=float, default=0.2)
     parser.add_argument("--max-tokens", type=int, default=300)
     parser.add_argument(
         "--tool-demo",
         action="store_true",
-        help="Enable one simple function-calling loop (add_numbers).",
-    )
+        help="Enable one simple function-calling loop (add_numbers).")
     return parser
 
 
-def main() -> None:
+if __name__ == "__main__":
     args = build_parser().parse_args()
     models = _parse_models(args.models)
 
     for model in models:
         print(f"\n=== {model} ===")
-        try:
-            result = run_once(
-                model=model,
-                prompt=args.prompt,
-                temperature=args.temperature,
-                max_tokens=args.max_tokens,
-                tool_demo=args.tool_demo,
-            )
-            print(
-                "elapsed_s={elapsed_s} steps={steps} prompt_tokens={prompt_tokens} "
-                "completion_tokens={completion_tokens}".format(**result)
-            )
-            print(result["content"])
-        except Exception as exc:  # noqa: BLE001
-            print(f"ERROR: {exc}")
-
-
-if __name__ == "__main__":
-    main()
+        result = run_once(
+            model=model,
+            prompt=args.prompt,
+            temperature=args.temperature,
+            max_tokens=args.max_tokens,
+            tool_demo=args.tool_demo)
+        print(
+            "elapsed_s={elapsed_s} steps={steps} prompt_tokens={prompt_tokens} "
+            "completion_tokens={completion_tokens}".format(**result))
+        print(result["content"])
