@@ -44,16 +44,15 @@ Chocolate <- Education -> Alzheimers
 Chocolate -> CV
 CV -> Alzheimers"
 
-# Feed the causal graph into dagwood
-# dag <- "Chocolate -> Alzheimers
-# Chocolate <- Education -> Alzheimers
-# Chocolate -> CV
-# CV -> Alzheimers"
+lines <- strsplit(response, "\n", fixed = TRUE)[[1]]
+lines <- gsub("\r", "", lines)
 
-exposure <- "Chocolate"
-outcome <- "Alzheimers"
+exposure <- lines[1]
+outcome <- lines[2]
+dag <- paste(lines[-(1:2)], collapse = "\n")
 
 result <- dagwood(dag, exposure, outcome)
-
-branch.DAGs <- result$DAGs.branch
-ggdag(branch.DAGs$DAG.branch.candidate[1]) + theme_dag()
+assumptions <- paste(result$Summary[-(1:2)], collapse = "\n")
+print(assumptions)
+#branches <- result$DAGs.branch
+#ggdag(branches$DAG.branch.candidate[1]) + theme_dag()
