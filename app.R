@@ -5,12 +5,16 @@ library(ggdag)
 
 conv_dag_instr <-
   "The user will present a causal inference scenario. Interpret the scenario and
-  Format your response as follows:
+  format your response as follows.:
+  ```
   [treatment_variable]
   [outcome_variable]
   [cause_1] -> [effect_1]
   [cause_2] -> [effect_2]
-  ..."
+  ...
+  ```
+  Variable names should not suggest any particulardirection the variable may
+  take, and should not contain spaces."
 
 eval_assumption_instr <-
   "The following is a causal graph the user is contemplating. Each line
@@ -19,8 +23,15 @@ eval_assumption_instr <-
   The user will present an assumption, and your task is to evaluate that
   assumption using the graph and any other relevant knowledge you have, even
   about variables that are not included. Begin your response with 'Agree.' or
-  'Disagree.' Then explain your reasoning.
-  Here is the graph: "
+  'Disagree.' Then explain your reasoning."
+
+eval_graph_instr <-
+  "The user will send you the name of a treatment variable, the name of an
+  outcome variable, and a causal graph they are contemplating. Each line in the
+  graph is a causal relationship in the form 'cause -> effect'.
+  The graph may be incomplete and may not include all relevant variables.
+  List and explain any dubious assumptions the graph is making that could
+  threaten the validity of a causal inference based on this graph."
 
 # Study 1: Rainfall, Economic Growth, and Civil Conflict in Sub-Saharan Africa
 dag_prompt_iv_1 <-
@@ -271,7 +282,7 @@ call_llm <- function(system_prompt, user_prompt) {
 }
 
 # Get a causal graph from a LLM
-response <- call_llm(conv_dag_instr, dag_prompt)
+response <- call_llm(conv_dag_instr, dag_prompt_iv_1)
 print(response)
 
 # Parse out the response
@@ -280,9 +291,6 @@ lines <- gsub("\r", "", lines)
 exposure <- lines[1]
 outcome <- lines[2]
 dag <- paste(lines[-(1:2)], collapse = "\n")
-print(paste("Exposure:", exposure))
-print(paste("Outcome:", outcome))
-print(paste("DAG:", dag))
 
 # Feed graph into Dagwood and generate assumptions
 result <- dagwood(dag, exposure, outcome)
@@ -291,9 +299,25 @@ summary_lines <- trimws(summary_lines)
 assumptions <- summary_lines[startsWith(summary_lines, ".")]
 assumptions <- sub("^\\.\\s*", "", assumptions)
 
-# Have the LLM evaluate each assumption
+sink("dagwood_", append = FALSE, split = FALSE)
+print("CAUSAL GRAPH:")
+print(paste("Exposure:", exposure))
+print(paste("Outcome:", outcome))
+print(paste("Structure:", dag))
+
+# Have the LLM come up with dubious assumptions on its own
+user_prompt <- paste("\nHere is the treatment variable: ", exposure,
+                     "\nHere is the outcome variable: ", outcome,
+                     "\nHere is the graph: ", dag)
+response <- call_llm(eval_graph_instr, user_prompt)
+print("LLM-GENERATED ASSUMPTIONS:")
+print(response)
+
+# Have the LLM evaluate each Dagwood assumption
 for (assumption in assumptions) {
-  response <- call_llm(paste(eval_assumption_instr, dag), assumption)
-  print(assumption)
+  sys_prompt <- paste("Here is the graph: ", eval_assumption_instr, dag)
+  response <- call_llm(sys_prompt, assumption)
+  print(paste("DAGWOOD ASSUMPTION: ", assumption))
   print(response)
 }
+sink()
