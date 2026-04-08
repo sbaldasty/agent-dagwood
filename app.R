@@ -282,7 +282,7 @@ call_llm <- function(system_prompt, user_prompt) {
 }
 
 # Get a causal graph from a LLM
-response <- call_llm(conv_dag_instr, dag_prompt_iv_1)
+response <- call_llm(conv_dag_instr, dag_prompt_iv_5)
 print(response)
 
 # Parse out the response
