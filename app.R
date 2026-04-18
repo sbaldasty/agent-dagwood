@@ -5,7 +5,7 @@ library(ggdag)
 
 conv_dag_instr <-
   "The user will present a causal inference scenario. Interpret the scenario and
-  format your response as follows.:
+  format your response as follows:
   ```
   [treatment_variable]
   [outcome_variable]
@@ -298,6 +298,27 @@ summary_lines <- strsplit(result$Summary, "\n", fixed = TRUE)[[1]]
 summary_lines <- trimws(summary_lines)
 assumptions <- summary_lines[startsWith(summary_lines, ".")]
 assumptions <- sub("^\\.\\s*", "", assumptions)
+
+#----------------Printing the branch DAGs-------------------
+# Get the branch DAGs from the DAGWOOD object
+branch.DAGs <- result$DAGs.branch
+
+dag_plots <- list()
+
+for(i in 1:length(branch.DAGs$DAG.branch.candidate)){
+  dag_plots[[i]] <- ggdag(
+    branch.DAGs$DAG.branch.candidate[i]
+  ) +
+    geom_dag_edges(edge_colour = "#333333") +
+    geom_dag_node(colour = "#2C6E49") +       
+    geom_dag_text(colour = "#FFFFFF") +         
+    geom_dag_label(colour = "#000000") +        
+    ggtitle(paste("Branch DAG"), i) +
+    theme_dag()
+}
+
+# Print all together with patchwork
+patchwork::wrap_plots(dag_plots)
 
 sink("dagwood_", append = FALSE, split = FALSE)
 print("CAUSAL GRAPH:")
