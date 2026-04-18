@@ -1,7 +1,7 @@
 library(httr2)
 library(jsonlite)
 library(dagwood)
-library(ggdag)
+library(shiny)
 
 conv_dag_instr <-
   "The user will present a causal inference scenario. Interpret the scenario and
@@ -23,7 +23,7 @@ eval_assumption_instr <-
   The user will present an assumption, and your task is to evaluate that
   assumption using the graph and any other relevant knowledge you have, even
   about variables that are not included. Begin your response with 'Agree.' or
-  'Disagree.' Then explain your reasoning."
+  'Disagree.' Then explain your reasoning concisely in plain text."
 
 eval_graph_instr <-
   "The user will send you the name of a treatment variable, the name of an
@@ -281,64 +281,217 @@ call_llm <- function(system_prompt, user_prompt) {
   if (is.null(x)) y else x
 }
 
-# Get a causal graph from a LLM
-response <- call_llm(conv_dag_instr, dag_prompt_iv_5)
-print(response)
+parse_llm_graph <- function(response_text) {
+  lines <- strsplit(response_text, "\n", fixed = TRUE)[[1]]
+  lines <- trimws(gsub("\r", "", lines))
+  lines <- lines[nzchar(lines)]
 
-# Parse out the response
-lines <- strsplit(response, "\n", fixed = TRUE)[[1]]
-lines <- gsub("\r", "", lines)
-exposure <- lines[1]
-outcome <- lines[2]
-dag <- paste(lines[-(1:2)], collapse = "\n")
+  if (length(lines) < 3) {
+    stop("Model output could not be parsed. Expected treatment, outcome, and at least one edge.")
+  }
 
-# Feed graph into Dagwood and generate assumptions
-result <- dagwood(dag, exposure, outcome)
-summary_lines <- strsplit(result$Summary, "\n", fixed = TRUE)[[1]]
-summary_lines <- trimws(summary_lines)
-assumptions <- summary_lines[startsWith(summary_lines, ".")]
-assumptions <- sub("^\\.\\s*", "", assumptions)
-
-#----------------Printing the branch DAGs-------------------
-# Get the branch DAGs from the DAGWOOD object
-branch.DAGs <- result$DAGs.branch
-
-dag_plots <- list()
-
-for(i in 1:length(branch.DAGs$DAG.branch.candidate)){
-  dag_plots[[i]] <- ggdag(
-    branch.DAGs$DAG.branch.candidate[i]
-  ) +
-    geom_dag_edges(edge_colour = "#333333") +
-    geom_dag_node(colour = "#2C6E49") +       
-    geom_dag_text(colour = "#FFFFFF") +         
-    geom_dag_label(colour = "#000000") +        
-    ggtitle(paste("Branch DAG"), i) +
-    theme_dag()
+  list(
+    exposure = lines[1],
+    outcome = lines[2],
+    dag = paste(lines[-(1:2)], collapse = "\n")
+  )
 }
 
-# Print all together with patchwork
-patchwork::wrap_plots(dag_plots)
-
-sink("dagwood_", append = FALSE, split = FALSE)
-print("CAUSAL GRAPH:")
-print(paste("Exposure:", exposure))
-print(paste("Outcome:", outcome))
-print(paste("Structure:", dag))
-
-# Have the LLM come up with dubious assumptions on its own
-user_prompt <- paste("\nHere is the treatment variable: ", exposure,
-                     "\nHere is the outcome variable: ", outcome,
-                     "\nHere is the graph: ", dag)
-response <- call_llm(eval_graph_instr, user_prompt)
-print("LLM-GENERATED ASSUMPTIONS:")
-print(response)
-
-# Have the LLM evaluate each Dagwood assumption
-for (assumption in assumptions) {
-  sys_prompt <- paste("Here is the graph: ", eval_assumption_instr, dag)
-  response <- call_llm(sys_prompt, assumption)
-  print(paste("DAGWOOD ASSUMPTION: ", assumption))
-  print(response)
+extract_assumptions <- function(dagwood_result) {
+  summary_lines <- strsplit(dagwood_result$Summary, "\n", fixed = TRUE)[[1]]
+  summary_lines <- trimws(summary_lines)
+  assumptions <- summary_lines[startsWith(summary_lines, ".")]
+  assumptions <- sub("^\\.\\s*", "", assumptions)
+  assumptions[nzchar(assumptions)]
 }
-sink()
+
+evaluate_single_assumption <- function(assumption, dag) {
+  sys_prompt <- paste0(eval_assumption_instr, "\n\nGraph:\n", dag)
+  call_llm(sys_prompt, assumption)
+}
+
+analyze_scenario <- function(user_text, progress = NULL) {
+  if (!is.null(progress)) progress(0.05, "Generating causal graph from scenario")
+  dag_response <- call_llm(conv_dag_instr, user_text)
+  parsed <- parse_llm_graph(dag_response)
+
+  if (!is.null(progress)) progress(0.25, "Running Dagwood on generated graph")
+  dagwood_result <- dagwood(parsed$dag, parsed$exposure, parsed$outcome)
+  assumptions <- extract_assumptions(dagwood_result)
+
+  if (!is.null(progress)) progress(0.40, "Asking LLM for additional dubious assumptions")
+  llm_assumptions <- call_llm(
+    eval_graph_instr,
+    paste(
+      "Treatment:", parsed$exposure,
+      "\nOutcome:", parsed$outcome,
+      "\nGraph:\n", parsed$dag
+    )
+  )
+
+  evaluations <- character(length(assumptions))
+  if (length(assumptions) == 0) {
+    if (!is.null(progress)) progress(1, "No Dagwood assumptions returned")
+  } else {
+    for (i in seq_along(assumptions)) {
+      msg <- paste("Evaluating assumption", i, "of", length(assumptions))
+      if (!is.null(progress)) progress(0.40 + (0.60 * i / length(assumptions)), msg)
+      evaluations[i] <- evaluate_single_assumption(assumptions[i], parsed$dag)
+    }
+  }
+
+  list(
+    parsed = parsed,
+    assumptions = assumptions,
+    evaluations = evaluations,
+    llm_assumptions = llm_assumptions,
+    dag_response = dag_response
+  )
+}
+
+example_prompts <- list(
+  "Custom input" = "",
+  "Study 1: Rainfall and Civil Conflict" = dag_prompt_iv_1,
+  "Study 2: Police Hiring and Crime" = dag_prompt_iv_2,
+  "Study 3: Settler Mortality and Development" = dag_prompt_iv_3,
+  "Study 4: Physician Preference and Antipsychotics" = dag_prompt_iv_4,
+  "Study 5: NICU Proximity and Infant Mortality" = dag_prompt_iv_5
+)
+
+ui <- fluidPage(
+  titlePanel("Agent-Dagwood: Assumption Reviewer"),
+  fluidRow(
+    column(
+      width = 12,
+      p("Provide a causal scenario. The app generates a causal graph, sends it to Dagwood, and evaluates each Dagwood assumption with an LLM.")
+    )
+  ),
+  fluidRow(
+    column(
+      width = 5,
+      selectInput("example_prompt", "Load example scenario", choices = names(example_prompts), selected = "Study 5: NICU Proximity and Infant Mortality"),
+      textAreaInput("scenario_input", "Scenario text", value = dag_prompt_iv_5, rows = 20, width = "100%"),
+      actionButton("analyze_btn", "Analyze", class = "btn-primary"),
+      actionButton("clear_btn", "Clear")
+    ),
+    column(
+      width = 7,
+      h4("Run Status"),
+      verbatimTextOutput("status_text"),
+      h4("Graph Summary"),
+      tableOutput("graph_summary"),
+      h4("Dagwood Assumptions With LLM Assessments"),
+      uiOutput("assumptions_ui"),
+      h4("Additional LLM-Generated Dubious Assumptions"),
+      verbatimTextOutput("llm_assumptions_text")
+    )
+  )
+)
+
+server <- function(input, output, session) {
+  state <- reactiveValues(
+    status = "Idle",
+    result = NULL
+  )
+
+  observeEvent(input$example_prompt, {
+    selected <- example_prompts[[input$example_prompt]]
+    if (!is.null(selected) && nzchar(selected)) {
+      updateTextAreaInput(session, "scenario_input", value = selected)
+    }
+  })
+
+  observeEvent(input$clear_btn, {
+    updateTextAreaInput(session, "scenario_input", value = "")
+    state$status <- "Cleared input"
+    state$result <- NULL
+  })
+
+  observeEvent(input$analyze_btn, {
+    user_text <- trimws(input$scenario_input)
+    if (!nzchar(user_text)) {
+      state$status <- "Please provide scenario text before analyzing."
+      return()
+    }
+
+    state$status <- "Starting analysis..."
+    state$result <- NULL
+
+    withProgress(message = "Running analysis", value = 0, {
+      result <- tryCatch(
+        analyze_scenario(user_text, progress = function(value, detail) {
+          setProgress(value = value, detail = detail)
+          state$status <- detail
+        }),
+        error = function(e) e
+      )
+
+      if (inherits(result, "error")) {
+        state$status <- paste("Error:", result$message)
+        showNotification(state$status, type = "error")
+      } else {
+        state$result <- result
+        state$status <- paste(
+          "Completed.",
+          length(result$assumptions),
+          "Dagwood assumptions evaluated."
+        )
+      }
+    })
+  })
+
+  output$status_text <- renderText({
+    state$status
+  })
+
+  output$graph_summary <- renderTable({
+    req(state$result)
+    data.frame(
+      Field = c("Exposure", "Outcome", "Number of assumptions"),
+      Value = c(
+        state$result$parsed$exposure,
+        state$result$parsed$outcome,
+        length(state$result$assumptions)
+      ),
+      check.names = FALSE
+    )
+  }, striped = TRUE, bordered = TRUE, spacing = "s")
+
+  output$assumptions_ui <- renderUI({
+    req(state$result)
+
+    assumptions <- state$result$assumptions
+    evaluations <- state$result$evaluations
+
+    if (length(assumptions) == 0) {
+      return(tags$p("Dagwood did not return any assumptions for this graph."))
+    }
+
+    cards <- lapply(seq_along(assumptions), function(i) {
+      assessment <- evaluations[i]
+      agrees <- grepl("^\\s*Agree\\.", assessment)
+      verdict <- if (agrees) "Agree" else "Disagree"
+      verdict_color <- if (agrees) "#1b5e20" else "#8b0000"
+
+      tags$div(
+        style = "border:1px solid #d9d9d9; border-radius:8px; padding:12px; margin-bottom:10px; background:#fafafa;",
+        tags$div(
+          style = "display:flex; justify-content:space-between; align-items:center;",
+          tags$strong(sprintf("Assumption %d", i)),
+          tags$span(verdict, style = paste0("color:", verdict_color, "; font-weight:700;"))
+        ),
+        tags$p(assumptions[i], style = "margin-top:8px; margin-bottom:8px;"),
+        tags$div(assessment, style = "white-space:pre-wrap;")
+      )
+    })
+
+    do.call(tagList, cards)
+  })
+
+  output$llm_assumptions_text <- renderText({
+    req(state$result)
+    state$result$llm_assumptions
+  })
+}
+
+shinyApp(ui, server)
