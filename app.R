@@ -2,6 +2,7 @@ library(httr2)
 library(jsonlite)
 library(dagwood)
 library(ggdag)
+library(later)
 library(shiny)
 
 conv_dag_instr <-
@@ -351,21 +352,12 @@ analyze_scenario <- function(user_text, progress = NULL) {
     )
   )
 
-  evaluations <- character(length(assumptions))
-  if (length(assumptions) == 0) {
-    if (!is.null(progress)) progress(1, "No Dagwood assumptions returned")
-  } else {
-    for (i in seq_along(assumptions)) {
-      msg <- paste("Evaluating assumption", i, "of", length(assumptions))
-      if (!is.null(progress)) progress(0.40 + (0.60 * i / length(assumptions)), msg)
-      evaluations[i] <- evaluate_single_assumption(assumptions[i], parsed$dag)
-    }
-  }
+  if (!is.null(progress)) progress(1, "Base analysis complete")
 
   list(
     parsed = parsed,
     assumptions = assumptions,
-    evaluations = evaluations,
+    evaluations = rep("", length(assumptions)),
     branch_dags = branch_dags,
     root_dag = root_dag,
     llm_assumptions = llm_assumptions,
@@ -416,7 +408,8 @@ ui <- fluidPage(
 server <- function(input, output, session) {
   state <- reactiveValues(
     status = "Idle",
-    result = NULL
+    result = NULL,
+    run_id = 0
   )
 
   observeEvent(input$example_prompt, {
@@ -427,6 +420,7 @@ server <- function(input, output, session) {
   })
 
   observeEvent(input$clear_btn, {
+    state$run_id <- state$run_id + 1
     updateTextAreaInput(session, "scenario_input", value = "")
     state$status <- "Cleared input"
     state$result <- NULL
@@ -439,6 +433,8 @@ server <- function(input, output, session) {
       return()
     }
 
+    state$run_id <- state$run_id + 1
+    current_run <- state$run_id
     state$status <- "Starting analysis..."
     state$result <- NULL
 
@@ -455,12 +451,61 @@ server <- function(input, output, session) {
         state$status <- paste("Error:", result$message)
         showNotification(state$status, type = "error")
       } else {
+        if (!identical(current_run, state$run_id)) {
+          return()
+        }
+
         state$result <- result
-        state$status <- paste(
-          "Completed.",
-          length(result$assumptions),
-          "Dagwood assumptions evaluated."
-        )
+
+        total <- length(result$assumptions)
+        if (total == 0) {
+          state$status <- "Completed. No Dagwood assumptions returned."
+          return()
+        }
+
+        state$status <- paste("Evaluating assumption 1 of", total)
+
+        evaluate_next <- function(idx) {
+          if (!identical(current_run, isolate(state$run_id))) {
+            return()
+          }
+
+          result_snapshot <- isolate(state$result)
+          if (is.null(result_snapshot)) {
+            return()
+          }
+
+          total_local <- length(result_snapshot$assumptions)
+          if (idx > total_local) {
+            isolate({
+              state$status <- paste("Completed.", total_local, "Dagwood assumptions evaluated.")
+            })
+            return()
+          }
+
+          isolate({
+            state$status <- paste("Evaluating assumption", idx, "of", total_local)
+          })
+          assumption <- result_snapshot$assumptions[idx]
+          dag_text <- result_snapshot$parsed$dag
+
+          assessment <- tryCatch(
+            evaluate_single_assumption(assumption, dag_text),
+            error = function(e) paste("Error:", e$message)
+          )
+
+          isolate({
+            updated <- state$result
+            if (!is.null(updated) && idx <= length(updated$evaluations)) {
+              updated$evaluations[idx] <- assessment
+              state$result <- updated
+            }
+          })
+
+          later(function() evaluate_next(idx + 1), delay = 0)
+        }
+
+        later(function() evaluate_next(1), delay = 0)
       }
     })
   })
@@ -505,9 +550,10 @@ server <- function(input, output, session) {
     cards <- lapply(seq_along(assumptions), function(i) {
       plot_id <- paste0("branch_dag_plot_", i)
       assessment <- evaluations[i]
-      agrees <- grepl("^\\s*Agree\\.", assessment)
-      verdict <- if (agrees) "Agree" else "Disagree"
-      verdict_color <- if (agrees) "#1b5e20" else "#8b0000"
+      pending <- !nzchar(trimws(assessment))
+      agrees <- (!pending) && grepl("^\\s*Agree\\.", assessment)
+      verdict <- if (pending) "Pending" else if (agrees) "Agree" else "Disagree"
+      verdict_color <- if (pending) "#616161" else if (agrees) "#1b5e20" else "#8b0000"
 
       if (i <= length(branch_dags)) {
         local({
@@ -538,7 +584,10 @@ server <- function(input, output, session) {
           tags$div(
             style = "flex:1; min-width:280px;",
             tags$p(assumptions[i], style = "margin-top:0px; margin-bottom:8px;"),
-            tags$div(assessment, style = "white-space:pre-wrap;")
+            tags$div(
+              if (pending) "Evaluating..." else assessment,
+              style = "white-space:pre-wrap;"
+            )
           ),
           tags$div(
             style = "flex:1; min-width:280px;",
