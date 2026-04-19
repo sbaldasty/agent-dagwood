@@ -572,7 +572,7 @@ server <- function(input, output, session) {
       }
 
       tags$div(
-        style = "border:1px solid #d9d9d9; border-radius:8px; padding:12px; margin-bottom:10px; background:#fafafa;",
+        style = "border:1px solid #d9d9d9; border-radius:8px; padding:12px; margin-bottom:10px;",
         tags$div(
           style = "display:flex; justify-content:space-between; align-items:center;",
           tags$strong(sprintf("Assumption %d", i)),
