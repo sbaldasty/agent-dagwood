@@ -369,7 +369,7 @@ ui <- fluidPage(
   fluidRow(
     column(
       width = 5,
-      selectInput("example_prompt", "Load example scenario", choices = names(example_prompts), selected = "Study 5: NICU Proximity and Infant Mortality"),
+      selectInput("example_prompt", "Load example scenario", choices = names(example_prompts), selected = "Study 5: NICU Proximity and Infant Mortality", width = "100%"),
       textAreaInput("scenario_input", "Scenario text", value = dag_prompt_iv_5, rows = 20, width = "100%"),
       actionButton("analyze_btn", "Analyze", class = "btn-primary"),
       actionButton("clear_btn", "Clear")
