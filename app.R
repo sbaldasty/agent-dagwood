@@ -566,7 +566,6 @@ server <- function(input, output, session) {
               geom_dag_node(colour = "#2C6E49") +
               geom_dag_text(colour = "#FFFFFF") +
               geom_dag_label(colour = "#000000") +
-              ggplot2::ggtitle(paste("Branch DAG", idx)) +
               theme_dag()
           }, height = 260)
         })
