@@ -312,6 +312,22 @@ evaluate_single_assumption <- function(assumption, dag) {
   call_llm(sys_prompt, assumption)
 }
 
+parse_assessment_response <- function(response_text) {
+  trimmed <- trimws(response_text)
+
+  if (startsWith(trimmed, "Agree.")) {
+    explanation <- trimws(sub("^Agree\\.\\s*", "", trimmed))
+    return(list(verdict = "Agree", explanation = explanation))
+  }
+
+  if (startsWith(trimmed, "Disagree.")) {
+    explanation <- trimws(sub("^Disagree\\.\\s*", "", trimmed))
+    return(list(verdict = "Disagree", explanation = explanation))
+  }
+
+  stop("Assessment must begin with exactly 'Agree.' or 'Disagree.'.")
+}
+
 extract_branch_dags <- function(dagwood_result) {
   branch_obj <- dagwood_result$DAGs.branch
   if (is.null(branch_obj) || is.null(branch_obj$DAG.branch.candidate)) {
@@ -358,6 +374,7 @@ analyze_scenario <- function(user_text, progress = NULL) {
     parsed = parsed,
     assumptions = assumptions,
     evaluations = rep("", length(assumptions)),
+    verdicts = rep("", length(assumptions)),
     branch_dags = branch_dags,
     root_dag = root_dag,
     llm_assumptions = llm_assumptions,
@@ -491,13 +508,29 @@ server <- function(input, output, session) {
 
           assessment <- tryCatch(
             evaluate_single_assumption(assumption, dag_text),
-            error = function(e) paste("Error:", e$message)
+            error = function(e) e
           )
 
           isolate({
             updated <- state$result
-            if (!is.null(updated) && idx <= length(updated$evaluations)) {
-              updated$evaluations[idx] <- assessment
+            if (!is.null(updated) && idx <= length(updated$evaluations) && idx <= length(updated$verdicts)) {
+              if (inherits(assessment, "error")) {
+                updated$verdicts[idx] <- "Error"
+                updated$evaluations[idx] <- paste("Error:", assessment$message)
+              } else {
+                parsed_assessment <- tryCatch(
+                  parse_assessment_response(assessment),
+                  error = function(e) e
+                )
+
+                if (inherits(parsed_assessment, "error")) {
+                  updated$verdicts[idx] <- "Error"
+                  updated$evaluations[idx] <- paste("Error:", parsed_assessment$message)
+                } else {
+                  updated$verdicts[idx] <- parsed_assessment$verdict
+                  updated$evaluations[idx] <- parsed_assessment$explanation
+                }
+              }
               state$result <- updated
             }
           })
@@ -541,6 +574,7 @@ server <- function(input, output, session) {
 
     assumptions <- state$result$assumptions
     evaluations <- state$result$evaluations
+    verdicts <- state$result$verdicts %||% rep("", length(assumptions))
     branch_dags <- state$result$branch_dags %||% list()
 
     if (length(assumptions) == 0) {
@@ -550,10 +584,19 @@ server <- function(input, output, session) {
     cards <- lapply(seq_along(assumptions), function(i) {
       plot_id <- paste0("branch_dag_plot_", i)
       assessment <- evaluations[i]
-      pending <- !nzchar(trimws(assessment))
-      agrees <- (!pending) && grepl("^\\s*Agree\\.", assessment)
-      verdict <- if (pending) "Pending" else if (agrees) "Agree" else "Disagree"
-      verdict_color <- if (pending) "#616161" else if (agrees) "#1b5e20" else "#8b0000"
+      verdict_value <- verdicts[i]
+      pending <- !nzchar(trimws(verdict_value))
+      is_error <- identical(verdict_value, "Error")
+      verdict <- if (pending) "Pending" else verdict_value
+      verdict_color <- if (pending) {
+        "#616161"
+      } else if (is_error) {
+        "#b00020"
+      } else if (identical(verdict_value, "Agree")) {
+        "#1b5e20"
+      } else {
+        "#8b0000"
+      }
 
       if (i <= length(branch_dags)) {
         local({
