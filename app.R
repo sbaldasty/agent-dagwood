@@ -320,6 +320,16 @@ extract_branch_dags <- function(dagwood_result) {
   as.list(branch_obj$DAG.branch.candidate)
 }
 
+extract_root_dag <- function(dagwood_result, parsed_dag_text) {
+  root_candidate <- dagwood_result$DAG.root
+  if (!is.null(root_candidate) && length(root_candidate) > 0) {
+    return(root_candidate)
+  }
+
+  # Fallback to parsed edge list text so the app can still render a root graph.
+  parsed_dag_text
+}
+
 analyze_scenario <- function(user_text, progress = NULL) {
   if (!is.null(progress)) progress(0.05, "Generating causal graph from scenario")
   dag_response <- call_llm(conv_dag_instr, user_text)
@@ -329,6 +339,7 @@ analyze_scenario <- function(user_text, progress = NULL) {
   dagwood_result <- dagwood(parsed$dag, parsed$exposure, parsed$outcome)
   assumptions <- extract_assumptions(dagwood_result)
   branch_dags <- extract_branch_dags(dagwood_result)
+  root_dag <- extract_root_dag(dagwood_result, parsed$dag)
 
   if (!is.null(progress)) progress(0.40, "Asking LLM for additional dubious assumptions")
   llm_assumptions <- call_llm(
@@ -356,6 +367,7 @@ analyze_scenario <- function(user_text, progress = NULL) {
     assumptions = assumptions,
     evaluations = evaluations,
     branch_dags = branch_dags,
+    root_dag = root_dag,
     llm_assumptions = llm_assumptions,
     dag_response = dag_response
   )
@@ -392,6 +404,7 @@ ui <- fluidPage(
       verbatimTextOutput("status_text"),
       h4("Graph Summary"),
       tableOutput("graph_summary"),
+      plotOutput("root_dag_plot", height = 320),
       h4("Dagwood Assumptions With LLM Assessments"),
       uiOutput("assumptions_ui"),
       h4("Additional LLM-Generated Dubious Assumptions"),
@@ -467,6 +480,16 @@ server <- function(input, output, session) {
       check.names = FALSE
     )
   }, striped = TRUE, bordered = TRUE, spacing = "s")
+
+  output$root_dag_plot <- renderPlot({
+    req(state$result)
+    ggdag(state$result$root_dag) +
+      geom_dag_edges(edge_colour = "#333333") +
+      geom_dag_node(colour = "#2C6E49") +
+      geom_dag_text(colour = "#FFFFFF") +
+      geom_dag_label(colour = "#000000") +
+      theme_dag()
+  })
 
   output$assumptions_ui <- renderUI({
     req(state$result)
