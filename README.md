@@ -16,11 +16,12 @@ All results are shown on one page.
 	- httr2
 	- jsonlite
 	- dagwood
+	- ggdag
 
 Install packages:
 
 ```r
-install.packages(c("shiny", "httr2", "jsonlite", "dagwood"))
+install.packages(c("shiny", "httr2", "jsonlite", "dagwood", "ggdag"))
 ```
 
 ## LLM Configuration

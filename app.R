@@ -1,6 +1,7 @@
 library(httr2)
 library(jsonlite)
 library(dagwood)
+library(ggdag)
 library(shiny)
 
 conv_dag_instr <-
@@ -310,6 +311,15 @@ evaluate_single_assumption <- function(assumption, dag) {
   call_llm(sys_prompt, assumption)
 }
 
+extract_branch_dags <- function(dagwood_result) {
+  branch_obj <- dagwood_result$DAGs.branch
+  if (is.null(branch_obj) || is.null(branch_obj$DAG.branch.candidate)) {
+    return(list())
+  }
+
+  as.list(branch_obj$DAG.branch.candidate)
+}
+
 analyze_scenario <- function(user_text, progress = NULL) {
   if (!is.null(progress)) progress(0.05, "Generating causal graph from scenario")
   dag_response <- call_llm(conv_dag_instr, user_text)
@@ -318,6 +328,7 @@ analyze_scenario <- function(user_text, progress = NULL) {
   if (!is.null(progress)) progress(0.25, "Running Dagwood on generated graph")
   dagwood_result <- dagwood(parsed$dag, parsed$exposure, parsed$outcome)
   assumptions <- extract_assumptions(dagwood_result)
+  branch_dags <- extract_branch_dags(dagwood_result)
 
   if (!is.null(progress)) progress(0.40, "Asking LLM for additional dubious assumptions")
   llm_assumptions <- call_llm(
@@ -344,6 +355,7 @@ analyze_scenario <- function(user_text, progress = NULL) {
     parsed = parsed,
     assumptions = assumptions,
     evaluations = evaluations,
+    branch_dags = branch_dags,
     llm_assumptions = llm_assumptions,
     dag_response = dag_response
   )
@@ -359,7 +371,7 @@ example_prompts <- list(
 )
 
 ui <- fluidPage(
-  titlePanel("Agent-Dagwood: Assumption Reviewer"),
+  titlePanel("Agent Dagwood"),
   fluidRow(
     column(
       width = 12,
@@ -447,11 +459,10 @@ server <- function(input, output, session) {
   output$graph_summary <- renderTable({
     req(state$result)
     data.frame(
-      Field = c("Exposure", "Outcome", "Number of assumptions"),
+      Field = c("Exposure", "Outcome"),
       Value = c(
         state$result$parsed$exposure,
-        state$result$parsed$outcome,
-        length(state$result$assumptions)
+        state$result$parsed$outcome
       ),
       check.names = FALSE
     )
@@ -462,16 +473,35 @@ server <- function(input, output, session) {
 
     assumptions <- state$result$assumptions
     evaluations <- state$result$evaluations
+    branch_dags <- state$result$branch_dags %||% list()
 
     if (length(assumptions) == 0) {
       return(tags$p("Dagwood did not return any assumptions for this graph."))
     }
 
     cards <- lapply(seq_along(assumptions), function(i) {
+      plot_id <- paste0("branch_dag_plot_", i)
       assessment <- evaluations[i]
       agrees <- grepl("^\\s*Agree\\.", assessment)
       verdict <- if (agrees) "Agree" else "Disagree"
       verdict_color <- if (agrees) "#1b5e20" else "#8b0000"
+
+      if (i <= length(branch_dags)) {
+        local({
+          idx <- i
+          pid <- plot_id
+          output[[pid]] <- renderPlot({
+            dag_candidate <- state$result$branch_dags[[idx]]
+            ggdag(dag_candidate) +
+              geom_dag_edges(edge_colour = "#333333") +
+              geom_dag_node(colour = "#2C6E49") +
+              geom_dag_text(colour = "#FFFFFF") +
+              geom_dag_label(colour = "#000000") +
+              ggplot2::ggtitle(paste("Branch DAG", idx)) +
+              theme_dag()
+          }, height = 260)
+        })
+      }
 
       tags$div(
         style = "border:1px solid #d9d9d9; border-radius:8px; padding:12px; margin-bottom:10px; background:#fafafa;",
@@ -480,8 +510,22 @@ server <- function(input, output, session) {
           tags$strong(sprintf("Assumption %d", i)),
           tags$span(verdict, style = paste0("color:", verdict_color, "; font-weight:700;"))
         ),
-        tags$p(assumptions[i], style = "margin-top:8px; margin-bottom:8px;"),
-        tags$div(assessment, style = "white-space:pre-wrap;")
+        tags$div(
+          style = "display:flex; gap:12px; align-items:flex-start; margin-top:8px;",
+          tags$div(
+            style = "flex:1; min-width:280px;",
+            tags$p(assumptions[i], style = "margin-top:0px; margin-bottom:8px;"),
+            tags$div(assessment, style = "white-space:pre-wrap;")
+          ),
+          tags$div(
+            style = "flex:1; min-width:280px;",
+            if (i <= length(branch_dags)) {
+              plotOutput(plot_id, width = "100%")
+            } else {
+              tags$p("No branch DAG available for this assumption.")
+            }
+          )
+        )
       )
     })
 
