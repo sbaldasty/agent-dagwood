@@ -28,12 +28,12 @@ eval_assumption_instr <-
   'Disagree.' Then explain your reasoning concisely in plain text."
 
 eval_graph_instr <-
-  "The user will send you the name of a treatment variable, the name of an
-  outcome variable, and a causal graph they are contemplating. Each line in the
-  graph is a causal relationship in the form 'cause -> effect'.
-  The graph may be incomplete and may not include all relevant variables.
-  List and explain any dubious assumptions the graph is making that could
-  threaten the validity of a causal inference based on this graph."
+  "You will be presented with a scenario. Implicit in the scenario is a
+  treatment variable, an outcome variable, and a causal graph. You must report
+  on any dubious implicit or explicit assumptions, such as the absense of
+  certain confounders or the directionality of causal arrows, whose falsehood
+  would call into question the causal effect of the treatment variable on the
+  outcome variable. List and explain each such assumption separately."
 
 # Study 1: Rainfall, Economic Growth, and Civil Conflict in Sub-Saharan Africa
 dag_prompt_iv_1 <-
@@ -416,7 +416,7 @@ ui <- fluidPage(
       plotOutput("root_dag_plot", height = 320),
       h4("Dagwood Assumptions With LLM Assessments"),
       uiOutput("assumptions_ui"),
-      h4("Additional LLM-Generated Dubious Assumptions"),
+      h4("Dubious assumptions identified absent Dagwood (LLM response)"),
       verbatimTextOutput("llm_assumptions_text")
     )
   )
