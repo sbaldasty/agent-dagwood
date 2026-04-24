@@ -1,5 +1,5 @@
 build_ui <- function(example_prompts) {
-  default_prompt <- example_prompts[["Custom input"]] %||% ""
+  default_prompt <- example_prompts[[blank_scenario]] %||% ""
 
   fluidPage(
     titlePanel("Agent Dagwood"),
@@ -16,7 +16,7 @@ build_ui <- function(example_prompts) {
           "example_prompt",
           "Load example scenario",
           choices = names(example_prompts),
-          selected = "Custom input",
+          selected = blank_scenario,
           width = "100%"
         ),
         textAreaInput("scenario_input", "Scenario text", value = default_prompt, rows = 20, width = "100%"),
@@ -49,7 +49,7 @@ build_server <- function(example_prompts) {
 
     observeEvent(input$example_prompt, {
       selected <- example_prompts[[input$example_prompt]]
-      if (!is.null(selected) && nzchar(selected)) {
+      if (!is.null(selected)) {
         updateTextAreaInput(session, "scenario_input", value = selected)
       }
     })
