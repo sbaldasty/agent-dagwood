@@ -28,13 +28,13 @@ eval_graph_instr <-
   would call into question the causal effect of the treatment variable on the
   outcome variable. List and explain each such assumption separately."
 
-get_example_prompts <- function() {
+example_scenarios <- function() {
   list(
     "Custom input" = "",
-    "Rainfall and Civil Conflict" = read_extdata_text("conflict.txt"),
-    "Police Hiring and Crime" = read_extdata_text("hiring.txt"),
-    "Settler Mortality and Development" = read_extdata_text("settlers.txt"),
-    "Physician Preference and Antipsychotics" = read_extdata_text("prefs.txt"),
-    "NICU Proximity and Infant Mortality" = read_extdata_text("nicu.txt")
+    "Rainfall and Civil Conflict" = read_scenario("conflict.txt"),
+    "Police Hiring and Crime" = read_scenario("hiring.txt"),
+    "Settler Mortality and Development" = read_scenario("settlers.txt"),
+    "Physician Preference and Antipsychotics" = read_scenario("prefs.txt"),
+    "NICU Proximity and Infant Mortality" = read_scenario("nicu.txt")
   )
 }

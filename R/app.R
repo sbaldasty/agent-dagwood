@@ -293,7 +293,7 @@ build_server <- function(example_prompts) {
 #' @return Invisibly returns the running Shiny app object.
 #' @export
 run_app <- function(launch.browser = interactive(), ...) {
-  example_prompts <- get_example_prompts()
+  example_prompts <- example_scenarios()
   app <- shinyApp(
     ui = build_ui(example_prompts),
     server = build_server(example_prompts)
