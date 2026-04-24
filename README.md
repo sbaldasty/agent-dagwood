@@ -30,12 +30,6 @@ library(agentdagwood)
 run_app()
 ```
 
-A compatibility launcher remains available from the repo root:
-
-```bash
-Rscript app.R
-```
-
 ## LLM provider setup
 
 Configure one provider with environment variables before launch.
