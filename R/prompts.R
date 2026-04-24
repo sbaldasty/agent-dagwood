@@ -18,7 +18,7 @@ eval_assumption_instr <-
   The user will present an assumption, and your task is to evaluate that
   assumption using the graph and any other relevant knowledge you have, even
   about variables that are not included. Begin your response with 'Agree.' or
-  'Disagree.' Then explain your reasoning concisely in plain text."
+  'Disagree.' Then explain your reasoning concisely."
 
 eval_graph_instr <-
   "You will be presented with a scenario. Implicit in the scenario is a

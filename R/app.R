@@ -256,7 +256,7 @@ build_server <- function(example_prompts) {
               style = "flex:1; min-width:280px;",
               tags$p(assumptions[i], style = "margin-top:0px; margin-bottom:8px;"),
               tags$div(
-                if (pending) "Evaluating..." else assessment,
+                if (pending) "Evaluating..." else HTML(markdown::markdownToHTML(text = assessment, fragment.only = TRUE)),
                 style = "white-space:pre-wrap;"
               )
             ),
