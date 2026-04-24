@@ -1,6 +1,6 @@
 # Agent Dagwood
 
-Agent Dagwood is an R package that launches a Shiny app for causal-identification review.
+Agent Dagwood is an R package that launches a Shiny app that leverages LLMs and Dagwood for causal-identification review.
 
 ## Workflow
 1. The user provides a causal inference scenario in natural language, or selects an example from a drop down list
