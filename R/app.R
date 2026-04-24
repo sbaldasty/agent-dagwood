@@ -1,5 +1,5 @@
 build_ui <- function(example_prompts) {
-  default_prompt <- example_prompts[[blank_scenario]] %||% ""
+  default_prompt <- example_prompts[[blank_scenario]]
 
   fluidPage(
     titlePanel("Agent Dagwood"),
