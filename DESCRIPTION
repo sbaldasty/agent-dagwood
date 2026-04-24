@@ -1,6 +1,6 @@
 Package: agentdagwood
 Type: Package
-Title: Shiny Causal Assumption Analyzer Using Dagwood and LLMs
+Title: Shiny LLM-Enabled Causal Assumption Analyzer Using Dagwood
 Version: 0.1.0
 Authors@R: person(given = "Steven", family = "Baldasty", email = "sbaldasty@example.com", role = c("aut", "cre"))
 Description: Shiny app that converts a free-form causal inference scenario into
