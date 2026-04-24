@@ -1,0 +1,8 @@
+^.*\.Rproj$
+^\.Rproj\.user$
+^\.git$
+^\.github$
+^\.Rhistory$
+^\.RData$
+^\.DS_Store$
+^app\.R$

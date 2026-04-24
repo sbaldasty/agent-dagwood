@@ -1,43 +1,54 @@
-# agent-dagwood
+# agentdagwood
 
-Single-page Shiny app that:
-1. Accepts free-form causal inference scenario text from the user.
-2. Uses an LLM to convert the scenario into a causal graph.
-3. Sends that graph to Dagwood to extract identification assumptions.
-4. Asks the LLM to agree or disagree with each Dagwood assumption and explain why.
+agentdagwood is an R package that launches a Shiny app for causal-identification review.
 
-All results are shown on one page.
+The app:
+1. Accepts free-form causal inference scenario text.
+2. Uses an LLM to convert the scenario into a DAG edge list.
+3. Runs Dagwood to identify assumptions.
+4. Asks the LLM to assess each Dagwood assumption and explain the reasoning.
 
-## Requirements
+## Install
 
-- R 4.3+
-- R packages:
-	- shiny
-	- httr2
-	- jsonlite
-	- dagwood
-	- ggdag
-
-Install packages:
+### R-universe (recommended)
 
 ```r
-install.packages(c("shiny", "httr2", "jsonlite", "dagwood", "ggdag"))
+install.packages("agentdagwood", repos = c("https://sbaldasty.r-universe.dev", "https://cloud.r-project.org"))
 ```
 
-## LLM Configuration
+### From source
 
-Set provider and credentials using environment variables.
+```r
+install.packages("pak")
+pak::pak("sbaldasty/agent-dagwood")
+```
 
-### Option A: Gemini
+## Launch
+
+```r
+library(agentdagwood)
+run_app()
+```
+
+A compatibility launcher remains available from the repo root:
+
+```bash
+Rscript app.R
+```
+
+## LLM provider setup
+
+Configure one provider with environment variables before launch.
+
+### Gemini
 
 ```bash
 export LLM_PROVIDER=gemini
 export GEMINI_API_KEY=your_api_key_here
-# Optional override:
 export GEMINI_MODEL=gemini-2.5-flash
 ```
 
-### Option B: Local (Ollama-compatible)
+### Local (Ollama-compatible)
 
 ```bash
 export LLM_PROVIDER=local
@@ -45,28 +56,15 @@ export LOCAL_API_URL=http://localhost:11434/api/chat
 export LOCAL_MODEL=deepseek-r1:1.5b
 ```
 
-## Run
+## Troubleshooting
 
-From the repository root:
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| `GEMINI_API_KEY is required when LLM_PROVIDER=gemini` | Missing key | Set `GEMINI_API_KEY` in the shell before launching R |
+| Local provider call failed | Ollama/local endpoint is down or wrong URL | Verify `LOCAL_API_URL` and that the service is reachable |
+| `Model output could not be parsed` | LLM returned malformed graph text | Retry analysis or switch model/provider |
+| Empty assumption assessments | Slow provider response or provider error | Check status text in-app and provider logs |
 
-```bash
-Rscript app.R
-```
+## Included examples
 
-Or from an interactive R session:
-
-```r
-source("app.R")
-```
-
-This launches a Shiny page with:
-- Example scenario selector
-- Scenario text area input
-- Analyze button
-- In-page outputs for graph summary, Dagwood assumptions, and LLM assessments
-
-## Notes
-
-- If `LLM_PROVIDER=gemini`, `GEMINI_API_KEY` is required.
-- If the LLM response is malformed (missing treatment/outcome/edges), the app surfaces a parse error instead of crashing.
-- Assumption evaluation may take time because each assumption is sent to the LLM separately.
+The five IV handout scenarios are bundled inside the package under `inst/extdata` and loaded in the app dropdown.
