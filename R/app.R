@@ -6,7 +6,7 @@ build_ui <- function(example_prompts) {
     fluidRow(
       column(
         width = 12,
-        p("Provide a causal scenario. The app generates a causal graph, sends it to Dagwood, and evaluates each Dagwood assumption with an LLM.")
+        p("Provide a causal inference scenario in natural language, or select an example from the drop down list. When you Analyze, a LLM will identify your treatment and outcome variables, and generate a causal graph. Using the causal graph, Dagwood will generate assumptions that must hold for a causal analysis to be valid, and the LLM will offer its opinion about each assumption.")
       )
     ),
     fluidRow(
@@ -32,7 +32,7 @@ build_ui <- function(example_prompts) {
         plotOutput("root_dag_plot", height = 320),
         h4("Dagwood Assumptions With LLM Assessments"),
         uiOutput("assumptions_ui"),
-        h4("Dubious assumptions identified absent Dagwood (LLM response)"),
+        h4("LLM asked to find any dubious assumptions without Dagwood"),
         verbatimTextOutput("llm_assumptions_text")
       )
     )
@@ -179,9 +179,9 @@ build_server <- function(example_prompts) {
     output$graph_summary <- renderUI({
       req(state$result)
       summary_md <- paste0(
-        "The **exposure** is `",
+        "The **exposure** variable is `",
         state$result$parsed$exposure,
-        "`, and the **outcome** is `",
+        "`, and the **outcome** variable is `",
         state$result$parsed$outcome,
         "`."
       )
