@@ -28,7 +28,7 @@ build_ui <- function(example_prompts) {
         h4("Run Status"),
         verbatimTextOutput("status_text"),
         h4("Graph Summary"),
-        tableOutput("graph_summary"),
+        uiOutput("graph_summary"),
         plotOutput("root_dag_plot", height = 320),
         h4("Dagwood Assumptions With LLM Assessments"),
         uiOutput("assumptions_ui"),
@@ -176,17 +176,17 @@ build_server <- function(example_prompts) {
       state$status
     })
 
-    output$graph_summary <- renderTable({
+    output$graph_summary <- renderUI({
       req(state$result)
-      data.frame(
-        Field = c("Exposure", "Outcome"),
-        Value = c(
-          state$result$parsed$exposure,
-          state$result$parsed$outcome
-        ),
-        check.names = FALSE
+      summary_md <- paste0(
+        "The **exposure** is `",
+        state$result$parsed$exposure,
+        "`, and the **outcome** is `",
+        state$result$parsed$outcome,
+        "`."
       )
-    }, striped = TRUE, bordered = TRUE, spacing = "s")
+      HTML(markdown::markdownToHTML(text = summary_md, fragment.only = TRUE))
+    })
 
     output$root_dag_plot <- renderPlot({
       req(state$result)
