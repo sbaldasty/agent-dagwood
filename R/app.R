@@ -1,5 +1,5 @@
 build_ui <- function(example_prompts) {
-  default_prompt <- example_prompts[["Study 5: NICU Proximity and Infant Mortality"]] %||% ""
+  default_prompt <- example_prompts[["Custom input"]] %||% ""
 
   fluidPage(
     titlePanel("Agent Dagwood"),
@@ -16,7 +16,7 @@ build_ui <- function(example_prompts) {
           "example_prompt",
           "Load example scenario",
           choices = names(example_prompts),
-          selected = "Study 5: NICU Proximity and Infant Mortality",
+          selected = "Custom input",
           width = "100%"
         ),
         textAreaInput("scenario_input", "Scenario text", value = default_prompt, rows = 20, width = "100%"),
