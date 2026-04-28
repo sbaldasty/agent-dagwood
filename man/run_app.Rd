@@ -13,5 +13,5 @@ run_app(launch.browser = interactive(), ...)
 Invisibly returns the running Shiny app object.
 }
 \description{
-Starts the packaged Shiny app for scenario-to-DAG analysis and assumption evaluation.
+Starts the packaged Shiny app for scenario-to-DAG analysis and assumption evaluation. Requires the environment variable GEMINI_API_KEY to be set.
 }
