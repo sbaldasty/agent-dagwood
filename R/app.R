@@ -227,12 +227,18 @@ build_server <- function(example_prompts) {
 
       assumptions <- state$assumptions
       branch_dags <- state$graph_data$branch_dags %||% list()
+      verdicts <- state$verdicts %||% character()
+      completed_idx <- which(nzchar(trimws(verdicts)))
 
       if (length(assumptions) == 0) {
         return(shiny::tags$p("Dagwood did not return any assumptions for this graph."))
       }
 
-      cards <- lapply(seq_along(assumptions), function(i) {
+      if (length(completed_idx) == 0) {
+        return(NULL)
+      }
+
+      cards <- lapply(completed_idx, function(i) {
         plot_id <- paste0("branch_dag_plot_", i)
         verdict_id <- paste0("assumption_verdict_", i)
         assessment_id <- paste0("assumption_assessment_", i)
@@ -258,12 +264,8 @@ build_server <- function(example_prompts) {
           vid <- verdict_id
           output[[vid]] <- shiny::renderUI({
             verdict_value <- state$verdicts[idx] %||% ""
-            pending <- !nzchar(trimws(verdict_value))
             is_error <- identical(verdict_value, "Error")
-            verdict <- if (pending) "Pending" else verdict_value
-            verdict_color <- if (pending) {
-              "#616161"
-            } else if (is_error) {
+            verdict_color <- if (is_error) {
               "#b00020"
             } else if (identical(verdict_value, "Agree")) {
               "#1b5e20"
@@ -272,7 +274,7 @@ build_server <- function(example_prompts) {
             }
 
             shiny::tags$span(
-              verdict,
+              verdict_value,
               style = paste0("color:", verdict_color, "; font-weight:700;")
             )
           })
@@ -282,12 +284,10 @@ build_server <- function(example_prompts) {
           idx <- i
           aid <- assessment_id
           output[[aid]] <- shiny::renderUI({
-            verdict_value <- state$verdicts[idx] %||% ""
-            pending <- !nzchar(trimws(verdict_value))
             assessment <- state$evaluations[idx] %||% ""
 
             shiny::tags$div(
-              if (pending) "Evaluating..." else shiny::HTML(markdown::markdownToHTML(text = assessment, fragment.only = TRUE)),
+              shiny::HTML(markdown::markdownToHTML(text = assessment, fragment.only = TRUE)),
               style = "white-space:pre-wrap;"
             )
           })
