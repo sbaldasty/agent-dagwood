@@ -30,6 +30,23 @@ build_ui <- function(example_prompts) {
 }
 
 build_server <- function(example_prompts) {
+  freeze_dag_layout <- function(dag_candidate, seed = 1L, layout = "nicely") {
+    tryCatch(
+      ggdag::tidy_dagitty(dag_candidate, seed = seed, layout = layout),
+      error = function(e) dag_candidate
+    )
+  }
+
+  freeze_dag_layouts <- function(dag_list, seed = 1000L, layout = "nicely") {
+    if (length(dag_list) == 0) {
+      return(list())
+    }
+
+    lapply(seq_along(dag_list), function(i) {
+      freeze_dag_layout(dag_list[[i]], seed = seed + i, layout = layout)
+    })
+  }
+
   function(input, output, session) {
     state <- shiny::reactiveValues(
       status = "Idle",
@@ -98,7 +115,9 @@ build_server <- function(example_prompts) {
         state$graph_data <- list(
           parsed = result$parsed,
           root_dag = result$root_dag,
-          branch_dags = result$branch_dags
+          branch_dags = result$branch_dags,
+          root_dag_tidy = freeze_dag_layout(result$root_dag, seed = 1L),
+          branch_dags_tidy = freeze_dag_layouts(result$branch_dags, seed = 1000L)
         )
         state$assumptions <- result$assumptions
         state$evaluations <- rep("", length(result$assumptions))
@@ -206,7 +225,8 @@ build_server <- function(example_prompts) {
 
     output$root_dag_plot <- shiny::renderPlot({
       shiny::req(state$graph_data)
-      ggdag::ggdag(state$graph_data$root_dag) +
+      dag_candidate <- state$graph_data$root_dag_tidy %||% state$graph_data$root_dag
+      ggdag::ggdag(dag_candidate) +
         ggdag::geom_dag_edges(edge_colour = "#333333") +
         ggdag::geom_dag_node(colour = "#2C6E49") +
         ggdag::geom_dag_text(colour = "#FFFFFF") +
@@ -227,6 +247,7 @@ build_server <- function(example_prompts) {
 
       assumptions <- state$assumptions
       branch_dags <- state$graph_data$branch_dags %||% list()
+      branch_dags_tidy <- state$graph_data$branch_dags_tidy %||% list()
       verdicts <- state$verdicts %||% character()
       completed_idx <- which(nzchar(trimws(verdicts)))
 
@@ -248,7 +269,11 @@ build_server <- function(example_prompts) {
             idx <- i
             pid <- plot_id
             output[[pid]] <- shiny::renderPlot({
-              dag_candidate <- state$graph_data$branch_dags[[idx]]
+              dag_candidate <- if (idx <= length(state$graph_data$branch_dags_tidy)) {
+                state$graph_data$branch_dags_tidy[[idx]]
+              } else {
+                state$graph_data$branch_dags[[idx]]
+              }
               ggdag::ggdag(dag_candidate) +
                 ggdag::geom_dag_edges(edge_colour = "#333333") +
                 ggdag::geom_dag_node(colour = "#2C6E49") +
@@ -323,7 +348,7 @@ build_server <- function(example_prompts) {
             shiny::tags$div(style = "width:1px; background:#d9d9d9; align-self:stretch;"),
             shiny::tags$div(
               style = "flex:1; min-width:280px; padding:12px;",
-              if (i <= length(branch_dags)) {
+              if (i <= length(branch_dags_tidy) || i <= length(branch_dags)) {
                 shiny::plotOutput(plot_id, width = "100%")
               } else {
                 shiny::tags$p("No branch DAG available for this assumption.")

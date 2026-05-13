@@ -32,6 +32,10 @@ default_llm_response <- function(system_prompt) {
       "treatment",
       "outcome",
       "treatment -> outcome",
+      "x -> treatment",
+      "x -> outcome",
+      "y -> x",
+      "z -> treatment",
       sep = "\n"
     ))
   }
