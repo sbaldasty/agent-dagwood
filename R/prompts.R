@@ -12,13 +12,15 @@ conv_dag_instr <-
   take, and should not contain spaces."
 
 eval_assumption_instr <-
-  "The following is a causal graph the user is contemplating. Each line
-  is a causal relationship in the form 'cause -> effect'.
-  The graph may be incomplete and may not include all relevant variables.
-  The user will present an assumption, and your task is to evaluate that
-  assumption using the graph and any other relevant knowledge you have, even
-  about variables that are not included. Begin your response with 'Agree.' or
-  'Disagree.' Then explain your reasoning concisely."
+  "The following is a DAGWOOD Root DAG where each line represents a relationship
+  of the form 'cause -> effect'.
+  You will be presented an assumption from DAGWOOD that must hold in order for
+  causal inferences to be valid. Use the graph and your subject matter expertise
+  to evaluate the assumption. Begin your response with 'Agree.' or 'Disagree.'
+  Then explain your reasoning, ideally in a short paragraph or two. For
+  instance, if the assumption asserts the nonexistence of a common cause, either
+  defend that or propose one; or if the assumption asserts the nonexistence of a
+  pathway, either defend that or propose one."
 
 blank_scenario <- "[Custom]"
 
