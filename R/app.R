@@ -29,9 +29,7 @@ build_ui <- function(example_prompts) {
         shiny::uiOutput("graph_summary"),
         shiny::plotOutput("root_dag_plot", height = 320),
         shiny::h4("Dagwood Assumptions With LLM Assessments"),
-        shiny::uiOutput("assumptions_ui"),
-        shiny::h4("LLM asked to find any dubious assumptions without Dagwood"),
-        shiny::verbatimTextOutput("llm_assumptions_text")
+        shiny::uiOutput("assumptions_ui")
       )
     )
   )
@@ -273,10 +271,6 @@ build_server <- function(example_prompts) {
       do.call(shiny::tagList, cards)
     })
 
-    output$llm_assumptions_text <- shiny::renderText({
-      shiny::req(state$result)
-      state$result$llm_assumptions
-    })
   }
 }
 

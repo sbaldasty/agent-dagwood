@@ -14,17 +14,6 @@ analyze_scenario <- function(user_text, progress = NULL, config = validate_provi
   branch_dags <- extract_branch_dags(dagwood_result)
   root_dag <- extract_root_dag(dagwood_result, parsed$dag)
 
-  if (!is.null(progress)) progress(0.40, "Asking LLM for additional dubious assumptions")
-  llm_assumptions <- call_llm(
-    eval_graph_instr,
-    paste(
-      "Treatment:", parsed$exposure,
-      "\nOutcome:", parsed$outcome,
-      "\nGraph:\n", parsed$dag
-    ),
-    config = config
-  )
-
   if (!is.null(progress)) progress(1, "Base analysis complete")
 
   list(
@@ -34,7 +23,6 @@ analyze_scenario <- function(user_text, progress = NULL, config = validate_provi
     verdicts = rep("", length(assumptions)),
     branch_dags = branch_dags,
     root_dag = root_dag,
-    llm_assumptions = llm_assumptions,
     dag_response = dag_response
   )
 }

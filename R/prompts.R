@@ -20,14 +20,6 @@ eval_assumption_instr <-
   about variables that are not included. Begin your response with 'Agree.' or
   'Disagree.' Then explain your reasoning concisely."
 
-eval_graph_instr <-
-  "You will be presented with a scenario. Implicit in the scenario is a
-  treatment variable, an outcome variable, and a causal graph. You must report
-  on any dubious implicit or explicit assumptions, such as the absence of
-  certain confounders or the directionality of causal arrows, whose falsehood
-  would call into question the causal effect of the treatment variable on the
-  outcome variable. List and explain each such assumption separately."
-
 blank_scenario <- "[Custom]"
 
 example_scenarios <- function() {
