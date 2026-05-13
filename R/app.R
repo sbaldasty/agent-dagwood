@@ -1,37 +1,37 @@
 build_ui <- function(example_prompts) {
-  fluidPage(
-    titlePanel("Agent Dagwood"),
-    fluidRow(
-      column(
+  shiny::fluidPage(
+    shiny::titlePanel("Agent Dagwood"),
+    shiny::fluidRow(
+      shiny::column(
         width = 12,
-        p("Provide a causal inference scenario in natural language, or select an example from the drop down list. When you Analyze, a LLM will identify your treatment and outcome variables, and generate a causal graph. Using the causal graph, Dagwood will generate assumptions that must hold for a causal analysis to be valid, and the LLM will offer its opinion about each assumption.")
+        shiny::p("Provide a causal inference scenario in natural language, or select an example from the drop down list. When you Analyze, a LLM will identify your treatment and outcome variables, and generate a causal graph. Using the causal graph, Dagwood will generate assumptions that must hold for a causal analysis to be valid, and the LLM will offer its opinion about each assumption.")
       )
     ),
-    fluidRow(
-      column(
+    shiny::fluidRow(
+      shiny::column(
         width = 5,
-        selectInput(
+        shiny::selectInput(
           "example_prompt",
           "Load example scenario",
           choices = names(example_prompts),
           selected = blank_scenario,
           width = "100%"
         ),
-        textAreaInput("scenario_input", "Scenario text", value = example_prompts[[blank_scenario]], rows = 20, width = "100%"),
-        actionButton("analyze_btn", "Analyze", class = "btn-primary"),
-        actionButton("clear_btn", "Clear")
+        shiny::textAreaInput("scenario_input", "Scenario text", value = example_prompts[[blank_scenario]], rows = 20, width = "100%"),
+        shiny::actionButton("analyze_btn", "Analyze", class = "btn-primary"),
+        shiny::actionButton("clear_btn", "Clear")
       ),
-      column(
+      shiny::column(
         width = 7,
-        h4("Run Status"),
-        verbatimTextOutput("status_text"),
-        h4("Graph Summary"),
-        uiOutput("graph_summary"),
-        plotOutput("root_dag_plot", height = 320),
-        h4("Dagwood Assumptions With LLM Assessments"),
-        uiOutput("assumptions_ui"),
-        h4("LLM asked to find any dubious assumptions without Dagwood"),
-        verbatimTextOutput("llm_assumptions_text")
+        shiny::h4("Run Status"),
+        shiny::verbatimTextOutput("status_text"),
+        shiny::h4("Graph Summary"),
+        shiny::uiOutput("graph_summary"),
+        shiny::plotOutput("root_dag_plot", height = 320),
+        shiny::h4("Dagwood Assumptions With LLM Assessments"),
+        shiny::uiOutput("assumptions_ui"),
+        shiny::h4("LLM asked to find any dubious assumptions without Dagwood"),
+        shiny::verbatimTextOutput("llm_assumptions_text")
       )
     )
   )
@@ -39,27 +39,27 @@ build_ui <- function(example_prompts) {
 
 build_server <- function(example_prompts) {
   function(input, output, session) {
-    state <- reactiveValues(
+    state <- shiny::reactiveValues(
       status = "Idle",
       result = NULL,
       run_id = 0
     )
 
-    observeEvent(input$example_prompt, {
+    shiny::observeEvent(input$example_prompt, {
       selected <- example_prompts[[input$example_prompt]]
       if (!is.null(selected)) {
-        updateTextAreaInput(session, "scenario_input", value = selected)
+        shiny::updateTextAreaInput(session, "scenario_input", value = selected)
       }
     })
 
-    observeEvent(input$clear_btn, {
+    shiny::observeEvent(input$clear_btn, {
       state$run_id <- state$run_id + 1
-      updateTextAreaInput(session, "scenario_input", value = "")
+      shiny::updateTextAreaInput(session, "scenario_input", value = "")
       state$status <- "Cleared input"
       state$result <- NULL
     })
 
-    observeEvent(input$analyze_btn, {
+    shiny::observeEvent(input$analyze_btn, {
       user_text <- trimws(input$scenario_input)
       if (!nzchar(user_text)) {
         state$status <- "Please provide scenario text before analyzing."
@@ -73,7 +73,7 @@ build_server <- function(example_prompts) {
 
       if (inherits(config, "error")) {
         state$status <- paste("Error:", config$message)
-        showNotification(state$status, type = "error")
+        shiny::showNotification(state$status, type = "error")
         return()
       }
 
@@ -82,10 +82,10 @@ build_server <- function(example_prompts) {
       state$status <- "Starting analysis..."
       state$result <- NULL
 
-      withProgress(message = "Running analysis", value = 0, {
+      shiny::withProgress(message = "Running analysis", value = 0, {
         result <- tryCatch(
           analyze_scenario(user_text, progress = function(value, detail) {
-            setProgress(value = value, detail = detail)
+            shiny::setProgress(value = value, detail = detail)
             state$status <- detail
           }, config = config),
           error = function(e) e
@@ -93,7 +93,7 @@ build_server <- function(example_prompts) {
 
         if (inherits(result, "error")) {
           state$status <- paste("Error:", result$message)
-          showNotification(state$status, type = "error")
+          shiny::showNotification(state$status, type = "error")
         } else {
           if (!identical(current_run, state$run_id)) {
             return()
@@ -110,24 +110,24 @@ build_server <- function(example_prompts) {
           state$status <- paste("Evaluating assumption 1 of", total)
 
           evaluate_next <- function(idx) {
-            if (!identical(current_run, isolate(state$run_id))) {
+            if (!identical(current_run, shiny::isolate(state$run_id))) {
               return()
             }
 
-            result_snapshot <- isolate(state$result)
+            result_snapshot <- shiny::isolate(state$result)
             if (is.null(result_snapshot)) {
               return()
             }
 
             total_local <- length(result_snapshot$assumptions)
             if (idx > total_local) {
-              isolate({
+              shiny::isolate({
                 state$status <- paste("Completed.", total_local, "Dagwood assumptions evaluated.")
               })
               return()
             }
 
-            isolate({
+            shiny::isolate({
               state$status <- paste("Evaluating assumption", idx, "of", total_local)
             })
             assumption <- result_snapshot$assumptions[idx]
@@ -138,7 +138,7 @@ build_server <- function(example_prompts) {
               error = function(e) e
             )
 
-            isolate({
+            shiny::isolate({
               updated <- state$result
               if (!is.null(updated) && idx <= length(updated$evaluations) && idx <= length(updated$verdicts)) {
                 if (inherits(assessment, "error")) {
@@ -162,20 +162,20 @@ build_server <- function(example_prompts) {
               }
             })
 
-            later(function() evaluate_next(idx + 1), delay = 0)
+            later::later(function() evaluate_next(idx + 1), delay = 0)
           }
 
-          later(function() evaluate_next(1), delay = 0)
+          later::later(function() evaluate_next(1), delay = 0)
         }
       })
     })
 
-    output$status_text <- renderText({
+    output$status_text <- shiny::renderText({
       state$status
     })
 
-    output$graph_summary <- renderUI({
-      req(state$result)
+    output$graph_summary <- shiny::renderUI({
+      shiny::req(state$result)
       summary_md <- paste0(
         "The **exposure** variable is `",
         state$result$parsed$exposure,
@@ -183,21 +183,21 @@ build_server <- function(example_prompts) {
         state$result$parsed$outcome,
         "`."
       )
-      HTML(markdown::markdownToHTML(text = summary_md, fragment.only = TRUE))
+      shiny::HTML(markdown::markdownToHTML(text = summary_md, fragment.only = TRUE))
     })
 
-    output$root_dag_plot <- renderPlot({
-      req(state$result)
-      ggdag(state$result$root_dag) +
-        geom_dag_edges(edge_colour = "#333333") +
-        geom_dag_node(colour = "#2C6E49") +
-        geom_dag_text(colour = "#FFFFFF") +
-        geom_dag_label(colour = "#000000") +
-        theme_dag()
+    output$root_dag_plot <- shiny::renderPlot({
+      shiny::req(state$result)
+      ggdag::ggdag(state$result$root_dag) +
+        ggdag::geom_dag_edges(edge_colour = "#333333") +
+        ggdag::geom_dag_node(colour = "#2C6E49") +
+        ggdag::geom_dag_text(colour = "#FFFFFF") +
+        ggdag::geom_dag_label(colour = "#000000") +
+        ggdag::theme_dag()
     })
 
-    output$assumptions_ui <- renderUI({
-      req(state$result)
+    output$assumptions_ui <- shiny::renderUI({
+      shiny::req(state$result)
 
       assumptions <- state$result$assumptions
       evaluations <- state$result$evaluations
@@ -205,7 +205,7 @@ build_server <- function(example_prompts) {
       branch_dags <- state$result$branch_dags %||% list()
 
       if (length(assumptions) == 0) {
-        return(tags$p("Dagwood did not return any assumptions for this graph."))
+        return(shiny::tags$p("Dagwood did not return any assumptions for this graph."))
       }
 
       cards <- lapply(seq_along(assumptions), function(i) {
@@ -229,52 +229,52 @@ build_server <- function(example_prompts) {
           local({
             idx <- i
             pid <- plot_id
-            output[[pid]] <- renderPlot({
+            output[[pid]] <- shiny::renderPlot({
               dag_candidate <- state$result$branch_dags[[idx]]
-              ggdag(dag_candidate) +
-                geom_dag_edges(edge_colour = "#333333") +
-                geom_dag_node(colour = "#2C6E49") +
-                geom_dag_text(colour = "#FFFFFF") +
-                geom_dag_label(colour = "#000000") +
-                theme_dag()
+              ggdag::ggdag(dag_candidate) +
+                ggdag::geom_dag_edges(edge_colour = "#333333") +
+                ggdag::geom_dag_node(colour = "#2C6E49") +
+                ggdag::geom_dag_text(colour = "#FFFFFF") +
+                ggdag::geom_dag_label(colour = "#000000") +
+                ggdag::theme_dag()
             }, height = 260)
           })
         }
 
-        tags$div(
+        shiny::tags$div(
           style = "border:1px solid #d9d9d9; border-radius:8px; padding:12px; margin-bottom:10px;",
-          tags$div(
+          shiny::tags$div(
             style = "display:flex; justify-content:space-between; align-items:center;",
-            tags$strong(sprintf("Assumption %d", i)),
-            tags$span(verdict, style = paste0("color:", verdict_color, "; font-weight:700;"))
+            shiny::tags$strong(sprintf("Assumption %d", i)),
+            shiny::tags$span(verdict, style = paste0("color:", verdict_color, "; font-weight:700;"))
           ),
-          tags$div(
+          shiny::tags$div(
             style = "display:flex; gap:12px; align-items:flex-start; margin-top:8px;",
-            tags$div(
+            shiny::tags$div(
               style = "flex:1; min-width:280px;",
-              tags$p(assumptions[i], style = "margin-top:0px; margin-bottom:8px;"),
-              tags$div(
-                if (pending) "Evaluating..." else HTML(markdown::markdownToHTML(text = assessment, fragment.only = TRUE)),
+              shiny::tags$p(assumptions[i], style = "margin-top:0px; margin-bottom:8px;"),
+              shiny::tags$div(
+                if (pending) "Evaluating..." else shiny::HTML(markdown::markdownToHTML(text = assessment, fragment.only = TRUE)),
                 style = "white-space:pre-wrap;"
               )
             ),
-            tags$div(
+            shiny::tags$div(
               style = "flex:1; min-width:280px;",
               if (i <= length(branch_dags)) {
-                plotOutput(plot_id, width = "100%")
+                shiny::plotOutput(plot_id, width = "100%")
               } else {
-                tags$p("No branch DAG available for this assumption.")
+                shiny::tags$p("No branch DAG available for this assumption.")
               }
             )
           )
         )
       })
 
-      do.call(tagList, cards)
+      do.call(shiny::tagList, cards)
     })
 
-    output$llm_assumptions_text <- renderText({
-      req(state$result)
+    output$llm_assumptions_text <- shiny::renderText({
+      shiny::req(state$result)
       state$result$llm_assumptions
     })
   }
@@ -292,9 +292,9 @@ build_server <- function(example_prompts) {
 #' @export
 run_app <- function(launch.browser = interactive(), ...) {
   example_prompts <- example_scenarios()
-  app <- shinyApp(
+  app <- shiny::shinyApp(
     ui = build_ui(example_prompts),
     server = build_server(example_prompts)
   )
-  runApp(app, launch.browser = launch.browser, ...)
+  shiny::runApp(app, launch.browser = launch.browser, ...)
 }

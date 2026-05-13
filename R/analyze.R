@@ -9,7 +9,7 @@ analyze_scenario <- function(user_text, progress = NULL, config = validate_provi
   parsed <- parse_llm_graph(dag_response)
 
   if (!is.null(progress)) progress(0.25, "Running Dagwood on generated graph")
-  dagwood_result <- dagwood(parsed$dag, parsed$exposure, parsed$outcome)
+  dagwood_result <- dagwood::dagwood(parsed$dag, parsed$exposure, parsed$outcome)
   assumptions <- extract_assumptions(dagwood_result)
   branch_dags <- extract_branch_dags(dagwood_result)
   root_dag <- extract_root_dag(dagwood_result, parsed$dag)

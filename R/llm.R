@@ -44,9 +44,9 @@ call_llm <- function(system_prompt, user_prompt, config = validate_provider_conf
     return(default_llm_response(system_prompt))
   }
   if (identical(config$provider, "local")) {
-    req <- request(config$local_api_url) |>
-      req_method("POST") |>
-      req_body_raw(toJSON(list(
+    req <- httr2::request(config$local_api_url) |>
+      httr2::req_method("POST") |>
+      httr2::req_body_raw(jsonlite::toJSON(list(
         model = config$local_model,
         messages = list(
           list(role = "system", content = system_prompt),
@@ -56,7 +56,7 @@ call_llm <- function(system_prompt, user_prompt, config = validate_provider_conf
       ), auto_unbox = TRUE))
 
     response <- tryCatch(
-      req_perform(req),
+      httr2::req_perform(req),
       error = function(e) {
         stop(
           paste0(
@@ -69,7 +69,7 @@ call_llm <- function(system_prompt, user_prompt, config = validate_provider_conf
       }
     )
 
-    json <- resp_body_json(response)
+    json <- httr2::resp_body_json(response)
     message <- json$message$content %||% ""
     if (!nzchar(trimws(message))) {
       stop("Local provider returned an empty response body.", call. = FALSE)
@@ -83,10 +83,10 @@ call_llm <- function(system_prompt, user_prompt, config = validate_provider_conf
     ":generateContent"
   )
 
-  req <- request(gemini_url) |>
-    req_url_query(key = config$gemini_api_key) |>
-    req_method("POST") |>
-    req_body_raw(toJSON(list(
+  req <- httr2::request(gemini_url) |>
+    httr2::req_url_query(key = config$gemini_api_key) |>
+    httr2::req_method("POST") |>
+    httr2::req_body_raw(jsonlite::toJSON(list(
       systemInstruction = list(parts = list(list(text = system_prompt))),
       contents = list(
         list(role = "user", parts = list(list(text = user_prompt)))
@@ -94,7 +94,7 @@ call_llm <- function(system_prompt, user_prompt, config = validate_provider_conf
     ), auto_unbox = TRUE))
 
   response <- tryCatch(
-    req_perform(req),
+    httr2::req_perform(req),
     error = function(e) {
       stop(
         paste0(
@@ -107,7 +107,7 @@ call_llm <- function(system_prompt, user_prompt, config = validate_provider_conf
     }
   )
 
-  json <- resp_body_json(response)
+  json <- httr2::resp_body_json(response)
   candidates <- json$candidates %||% list()
   if (length(candidates) == 0) {
     stop("Gemini response did not contain any candidates.", call. = FALSE)
