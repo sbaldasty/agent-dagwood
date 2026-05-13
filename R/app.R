@@ -9,7 +9,7 @@ build_ui <- function(example_prompts) {
     ),
     shiny::fluidRow(
       shiny::column(
-        width = 5,
+        width = 12,
         shiny::selectInput(
           "example_prompt",
           "Load example scenario",
@@ -19,10 +19,7 @@ build_ui <- function(example_prompts) {
         ),
         shiny::textAreaInput("scenario_input", "Scenario text", value = example_prompts[[blank_scenario]], rows = 20, width = "100%"),
         shiny::actionButton("analyze_btn", "Analyze", class = "btn-primary"),
-        shiny::actionButton("clear_btn", "Clear")
-      ),
-      shiny::column(
-        width = 7,
+        shiny::actionButton("clear_btn", "Clear"),
         shiny::h4("Run Status"),
         shiny::verbatimTextOutput("status_text"),
         shiny::h4("Graph Summary"),
