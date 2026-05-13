@@ -25,7 +25,7 @@ Its source code is available on [GitHub](https://github.com/sbaldasty/agent-dagw
 
 ## LLM setup
 
-Agent Dagwood requires a LLM to work properly. Currently the only supported options are Gemini and local ollama models, but broader support is planned. Configure a provider with environment variables before launch.
+Agent Dagwood requires a LLM to work properly. Currently the only supported options are Gemini and local ollama models. The prompts in the app are tuned for Gemini. Configure a provider with environment variables before launch.
 
 ### Gemini
 

@@ -3,7 +3,7 @@ validate_provider_config <- function(
     gemini_api_key = Sys.getenv("GEMINI_API_KEY", ""),
     gemini_model = Sys.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
     local_api_url = Sys.getenv("LOCAL_API_URL", "http://localhost:11434/api/chat"),
-    local_model = Sys.getenv("LOCAL_MODEL", "deepseek-r1:1.5b")) {
+    local_model = Sys.getenv("LOCAL_MODEL", "")) {
   provider <- tolower(trimws(provider))
   if (!provider %in% c("none", "local", "gemini")) {
     stop("Unsupported LLM_PROVIDER. Use 'none', 'local', or 'gemini'.", call. = FALSE)
@@ -40,7 +40,7 @@ default_llm_response <- function(system_prompt) {
     ))
   }
 
-  "Disagree. No LLM provider is configured, so this placeholder response was returned."
+  "Agree. No LLM provider is configured, so this placeholder response was returned."
 }
 
 call_llm <- function(system_prompt, user_prompt, config = validate_provider_config()) {
