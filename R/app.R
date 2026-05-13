@@ -265,17 +265,33 @@ build_server <- function(example_prompts) {
           output[[vid]] <- shiny::renderUI({
             verdict_value <- state$verdicts[idx] %||% ""
             is_error <- identical(verdict_value, "Error")
-            verdict_color <- if (is_error) {
-              "#b00020"
+            if (is_error) {
+              text_color <- "#b00020"
+              bg_color <- "#ffcdd2"
             } else if (identical(verdict_value, "Agree")) {
-              "#1b5e20"
+              text_color <- "#1b5e20"
+              bg_color <- "#e8f5e9"
+            } else if (nzchar(verdict_value)) {
+              text_color <- "#8b0000"
+              bg_color <- "#ffebee"
             } else {
-              "#8b0000"
+              text_color <- "#555555"
+              bg_color <- "#f5f5f5"
             }
-
-            shiny::tags$span(
-              verdict_value,
-              style = paste0("color:", verdict_color, "; font-weight:700;")
+            label <- if (nzchar(verdict_value)) {
+              sprintf("Assumption %d (%s)", idx, verdict_value)
+            } else {
+              sprintf("Assumption %d", idx)
+            }
+            shiny::tags$div(
+              label,
+              style = paste0(
+                "background-color:", bg_color, "; ",
+                "color:", text_color, "; ",
+                "font-weight:700; ",
+                "padding:8px 12px; ",
+                "border-bottom:1px solid #d9d9d9;"
+              )
             )
           })
         })
@@ -294,17 +310,14 @@ build_server <- function(example_prompts) {
         })
 
         shiny::tags$div(
-          style = "border:1px solid #d9d9d9; border-radius:8px; padding:12px; margin-bottom:10px;",
+          style = "border:1px solid #d9d9d9; border-radius:8px; overflow:hidden; margin-bottom:10px;",
+          shiny::uiOutput(verdict_id),
           shiny::tags$div(
-            style = "display:flex; justify-content:space-between; align-items:center;",
-            shiny::tags$strong(sprintf("Assumption %d", i)),
-            shiny::uiOutput(verdict_id)
-          ),
-          shiny::tags$div(
-            style = "display:flex; gap:12px; align-items:flex-start; margin-top:8px;",
+            style = "display:flex; gap:12px; align-items:flex-start; padding:12px;",
             shiny::tags$div(
               style = "flex:1; min-width:280px;",
-              shiny::tags$p(assumptions[i], style = "margin-top:0px; margin-bottom:8px;"),
+              shiny::tags$p(assumptions[i], style = "margin-top:0; margin-bottom:0;"),
+              shiny::tags$hr(style = "margin:10px 0;"),
               shiny::uiOutput(assessment_id)
             ),
             shiny::tags$div(
