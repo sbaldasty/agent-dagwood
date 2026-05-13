@@ -313,15 +313,16 @@ build_server <- function(example_prompts) {
           style = "border:1px solid #d9d9d9; border-radius:8px; overflow:hidden; margin-bottom:10px;",
           shiny::uiOutput(verdict_id),
           shiny::tags$div(
-            style = "display:flex; gap:12px; align-items:flex-start; padding:12px;",
+            style = "display:flex; align-items:flex-start;",
             shiny::tags$div(
-              style = "flex:1; min-width:280px;",
-              shiny::tags$p(assumptions[i], style = "margin-top:0; margin-bottom:0;"),
-              shiny::tags$hr(style = "margin:10px 0;"),
+              style = "flex:1; min-width:280px; padding:12px;",
+              shiny::tags$p(assumptions[i], style = "margin-top:0; margin-bottom:0; font-weight: bold;"),
+              shiny::tags$div(style = "height:1px; background:#d9d9d9; margin:10px -12px;"),
               shiny::uiOutput(assessment_id)
             ),
+            shiny::tags$div(style = "width:1px; background:#d9d9d9; align-self:stretch;"),
             shiny::tags$div(
-              style = "flex:1; min-width:280px;",
+              style = "flex:1; min-width:280px; padding:12px;",
               if (i <= length(branch_dags)) {
                 shiny::plotOutput(plot_id, width = "100%")
               } else {

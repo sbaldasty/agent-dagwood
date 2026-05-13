@@ -36,7 +36,7 @@ default_llm_response <- function(system_prompt) {
     ))
   }
 
-  "Agree. No LLM provider is configured, so this placeholder response was returned."
+  "Disagree. No LLM provider is configured, so this placeholder response was returned."
 }
 
 call_llm <- function(system_prompt, user_prompt, config = validate_provider_config()) {
