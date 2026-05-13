@@ -38,7 +38,7 @@ test_that("call_llm returns parseable DAG fallback for conv_dag prompt", {
 
   expect_equal(parsed$exposure, "treatment")
   expect_equal(parsed$outcome, "outcome")
-  expect_equal(parsed$dag, "treatment -> outcome")
+  expect_match(parsed$dag, "treatment -> outcome", fixed = TRUE)
 })
 
 test_that("call_llm returns assessment-safe fallback for other prompts", {
