@@ -55,37 +55,36 @@ build_server <- function(example_prompts) {
     })
 
     shiny::observeEvent(input$analyze_btn, {
+      capture_error <- function(expr) {
+        tryCatch(
+          list(ok = TRUE, value = expr),
+          error = function(e) list(ok = FALSE, message = conditionMessage(e))
+        )
+      }
+
       user_text <- trimws(input$scenario_input)
       if (!nzchar(user_text)) {
         state$status <- "Please provide scenario text before analyzing."
         return()
       }
 
-      config <- tryCatch(
-        validate_provider_config(),
-        error = function(e) e
-      )
-
-      if (inherits(config, "error")) {
-        state$status <- paste("Error:", config$message)
+      config_result <- capture_error(validate_provider_config())
+      if (!isTRUE(config_result$ok)) {
+        state$status <- paste("Error:", config_result$message)
         return()
       }
+      config <- config_result$value
 
       state$run_id <- state$run_id + 1
       current_run <- state$run_id
       state$status <- "Starting analysis..."
       state$result <- NULL
 
-      result <- tryCatch(
-        analyze_scenario(user_text, progress = function(value, detail) {
-          state$status <- detail
-        }, config = config),
-        error = function(e) e
-      )
-
-      if (inherits(result, "error")) {
-        state$status <- paste("Error:", result$message)
+      result_result <- capture_error(analyze_scenario(user_text, config = config))
+      if (!isTRUE(result_result$ok)) {
+        state$status <- paste("Error:", result_result$message)
       } else {
+        result <- result_result$value
         if (!identical(current_run, state$run_id)) {
           return()
         }
@@ -99,6 +98,20 @@ build_server <- function(example_prompts) {
         }
 
         state$status <- paste("Evaluating assumption 1 of", total)
+
+        set_assumption_result <- function(idx, verdict, explanation) {
+          updated <- state$result
+          if (!is.null(updated) && idx <= length(updated$evaluations) && idx <= length(updated$verdicts)) {
+            updated$verdicts[idx] <- verdict
+            updated$evaluations[idx] <- explanation
+            state$result <- updated
+          }
+        }
+
+        set_assumption_error <- function(idx, message) {
+          set_assumption_result(idx, "Error", paste("Error:", message))
+          state$status <- paste("Error:", message)
+        }
 
         evaluate_next <- function(idx) {
           if (!identical(current_run, shiny::isolate(state$run_id))) {
@@ -124,49 +137,21 @@ build_server <- function(example_prompts) {
           assumption <- result_snapshot$assumptions[idx]
           dag_text <- result_snapshot$parsed$dag
 
-          assessment <- tryCatch(
-            evaluate_single_assumption(assumption, dag_text, config = config),
-            error = function(e) e
-          )
-
-          if (inherits(assessment, "error")) {
-            shiny::isolate({
-              updated <- state$result
-              if (!is.null(updated) && idx <= length(updated$evaluations) && idx <= length(updated$verdicts)) {
-                updated$verdicts[idx] <- "Error"
-                updated$evaluations[idx] <- paste("Error:", assessment$message)
-                state$result <- updated
-              }
-              state$status <- paste("Error:", assessment$message)
-            })
-            return()
-          }
-
           parsed_assessment <- tryCatch(
-            parse_assessment_response(assessment),
+            {
+              assessment <- evaluate_single_assumption(assumption, dag_text, config = config)
+              parse_assessment_response(assessment)
+            },
             error = function(e) e
           )
 
           if (inherits(parsed_assessment, "error")) {
-            shiny::isolate({
-              updated <- state$result
-              if (!is.null(updated) && idx <= length(updated$evaluations) && idx <= length(updated$verdicts)) {
-                updated$verdicts[idx] <- "Error"
-                updated$evaluations[idx] <- paste("Error:", parsed_assessment$message)
-                state$result <- updated
-              }
-              state$status <- paste("Error:", parsed_assessment$message)
-            })
+            shiny::isolate(set_assumption_error(idx, parsed_assessment$message))
             return()
           }
 
           shiny::isolate({
-            updated <- state$result
-            if (!is.null(updated) && idx <= length(updated$evaluations) && idx <= length(updated$verdicts)) {
-              updated$verdicts[idx] <- parsed_assessment$verdict
-              updated$evaluations[idx] <- parsed_assessment$explanation
-              state$result <- updated
-            }
+            set_assumption_result(idx, parsed_assessment$verdict, parsed_assessment$explanation)
           })
 
           later::later(function() evaluate_next(idx + 1), delay = 0)

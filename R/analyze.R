@@ -3,18 +3,14 @@ evaluate_single_assumption <- function(assumption, dag, config = validate_provid
   call_llm(sys_prompt, assumption, config = config)
 }
 
-analyze_scenario <- function(user_text, progress = NULL, config = validate_provider_config()) {
-  if (!is.null(progress)) progress(0.05, "Generating causal graph from scenario")
+analyze_scenario <- function(user_text, config = validate_provider_config()) {
   dag_response <- call_llm(conv_dag_instr, user_text, config = config)
   parsed <- parse_llm_graph(dag_response)
 
-  if (!is.null(progress)) progress(0.25, "Running Dagwood on generated graph")
   dagwood_result <- dagwood::dagwood(parsed$dag, parsed$exposure, parsed$outcome)
   assumptions <- extract_assumptions(dagwood_result)
   branch_dags <- extract_branch_dags(dagwood_result)
   root_dag <- extract_root_dag(dagwood_result, parsed$dag)
-
-  if (!is.null(progress)) progress(1, "Base analysis complete")
 
   list(
     parsed = parsed,
