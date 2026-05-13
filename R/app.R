@@ -33,7 +33,10 @@ build_server <- function(example_prompts) {
   function(input, output, session) {
     state <- shiny::reactiveValues(
       status = "Idle",
-      result = NULL,
+      graph_data = NULL,
+      assumptions = character(),
+      evaluations = character(),
+      verdicts = character(),
       run_id = 0
     )
 
@@ -48,7 +51,10 @@ build_server <- function(example_prompts) {
       state$run_id <- state$run_id + 1
       shiny::updateTextAreaInput(session, "scenario_input", value = "")
       state$status <- "Cleared input"
-      state$result <- NULL
+      state$graph_data <- NULL
+      state$assumptions <- character()
+      state$evaluations <- character()
+      state$verdicts <- character()
     })
 
     shiny::observeEvent(input$analyze_btn, {
@@ -75,7 +81,10 @@ build_server <- function(example_prompts) {
       state$run_id <- state$run_id + 1
       current_run <- state$run_id
       state$status <- "Starting analysis..."
-      state$result <- NULL
+      state$graph_data <- NULL
+      state$assumptions <- character()
+      state$evaluations <- character()
+      state$verdicts <- character()
 
       result_result <- capture_error(analyze_scenario(user_text, config = config))
       if (!isTRUE(result_result$ok)) {
@@ -86,7 +95,14 @@ build_server <- function(example_prompts) {
           return()
         }
 
-        state$result <- result
+        state$graph_data <- list(
+          parsed = result$parsed,
+          root_dag = result$root_dag,
+          branch_dags = result$branch_dags
+        )
+        state$assumptions <- result$assumptions
+        state$evaluations <- rep("", length(result$assumptions))
+        state$verdicts <- rep("", length(result$assumptions))
 
         total <- length(result$assumptions)
         if (total == 0) {
@@ -97,11 +113,9 @@ build_server <- function(example_prompts) {
         state$status <- paste("Evaluating assumption 1 of", total)
 
         set_assumption_result <- function(idx, verdict, explanation) {
-          updated <- state$result
-          if (!is.null(updated) && idx <= length(updated$evaluations) && idx <= length(updated$verdicts)) {
-            updated$verdicts[idx] <- verdict
-            updated$evaluations[idx] <- explanation
-            state$result <- updated
+          if (idx <= length(state$evaluations) && idx <= length(state$verdicts)) {
+            state$verdicts[idx] <- verdict
+            state$evaluations[idx] <- explanation
           }
         }
 
@@ -115,15 +129,16 @@ build_server <- function(example_prompts) {
             return()
           }
 
-          result_snapshot <- shiny::isolate(state$result)
-          if (is.null(result_snapshot)) {
+          assumptions_snapshot <- shiny::isolate(state$assumptions)
+          graph_snapshot <- shiny::isolate(state$graph_data)
+          if (is.null(graph_snapshot)) {
             return()
           }
 
-          total_local <- length(result_snapshot$assumptions)
+          total_local <- length(assumptions_snapshot)
           if (idx > total_local) {
             shiny::isolate({
-              state$status <- paste("Completed.", total_local, "Dagwood assumptions evaluated.")
+              state$status <- "Completed"
             })
             return()
           }
@@ -131,8 +146,8 @@ build_server <- function(example_prompts) {
           shiny::isolate({
             state$status <- paste("Evaluating assumption", idx, "of", total_local)
           })
-          assumption <- result_snapshot$assumptions[idx]
-          dag_text <- result_snapshot$parsed$dag
+          assumption <- assumptions_snapshot[idx]
+          dag_text <- graph_snapshot$parsed$dag
 
           parsed_assessment <- tryCatch(
             {
@@ -163,7 +178,7 @@ build_server <- function(example_prompts) {
     })
 
     output$graph_summary_section <- shiny::renderUI({
-      shiny::req(state$result)
+      shiny::req(state$graph_data)
       shiny::tagList(
         shiny::h4("Graph Summary"),
         shiny::uiOutput("graph_summary"),
@@ -172,14 +187,14 @@ build_server <- function(example_prompts) {
     })
 
     output$graph_summary <- shiny::renderUI({
-      shiny::req(state$result)
-      assumption_count <- length(state$result$assumptions)
+      shiny::req(state$graph_data)
+      assumption_count <- length(state$assumptions)
       assumption_label <- if (assumption_count == 1) "assumption" else "assumptions"
       summary_md <- paste0(
         "The **exposure** variable is `",
-        state$result$parsed$exposure,
+        state$graph_data$parsed$exposure,
         "`, and the **outcome** variable is `",
-        state$result$parsed$outcome,
+        state$graph_data$parsed$outcome,
         "`. Dagwood generated **",
         assumption_count,
         "** ",
@@ -190,8 +205,8 @@ build_server <- function(example_prompts) {
     })
 
     output$root_dag_plot <- shiny::renderPlot({
-      shiny::req(state$result)
-      ggdag::ggdag(state$result$root_dag) +
+      shiny::req(state$graph_data)
+      ggdag::ggdag(state$graph_data$root_dag) +
         ggdag::geom_dag_edges(edge_colour = "#333333") +
         ggdag::geom_dag_node(colour = "#2C6E49") +
         ggdag::geom_dag_text(colour = "#FFFFFF") +
@@ -200,7 +215,7 @@ build_server <- function(example_prompts) {
     })
 
     output$assumptions_section <- shiny::renderUI({
-      shiny::req(state$result)
+      shiny::req(state$graph_data)
       shiny::tagList(
         shiny::h4("Dagwood Assumptions With LLM Assessments"),
         shiny::uiOutput("assumptions_ui")
@@ -208,12 +223,10 @@ build_server <- function(example_prompts) {
     })
 
     output$assumptions_ui <- shiny::renderUI({
-      shiny::req(state$result)
+      shiny::req(state$graph_data)
 
-      assumptions <- state$result$assumptions
-      evaluations <- state$result$evaluations
-      verdicts <- state$result$verdicts %||% rep("", length(assumptions))
-      branch_dags <- state$result$branch_dags %||% list()
+      assumptions <- state$assumptions
+      branch_dags <- state$graph_data$branch_dags %||% list()
 
       if (length(assumptions) == 0) {
         return(shiny::tags$p("Dagwood did not return any assumptions for this graph."))
@@ -221,27 +234,15 @@ build_server <- function(example_prompts) {
 
       cards <- lapply(seq_along(assumptions), function(i) {
         plot_id <- paste0("branch_dag_plot_", i)
-        assessment <- evaluations[i]
-        verdict_value <- verdicts[i]
-        pending <- !nzchar(trimws(verdict_value))
-        is_error <- identical(verdict_value, "Error")
-        verdict <- if (pending) "Pending" else verdict_value
-        verdict_color <- if (pending) {
-          "#616161"
-        } else if (is_error) {
-          "#b00020"
-        } else if (identical(verdict_value, "Agree")) {
-          "#1b5e20"
-        } else {
-          "#8b0000"
-        }
+        verdict_id <- paste0("assumption_verdict_", i)
+        assessment_id <- paste0("assumption_assessment_", i)
 
         if (i <= length(branch_dags)) {
           local({
             idx <- i
             pid <- plot_id
             output[[pid]] <- shiny::renderPlot({
-              dag_candidate <- state$result$branch_dags[[idx]]
+              dag_candidate <- state$graph_data$branch_dags[[idx]]
               ggdag::ggdag(dag_candidate) +
                 ggdag::geom_dag_edges(edge_colour = "#333333") +
                 ggdag::geom_dag_node(colour = "#2C6E49") +
@@ -252,22 +253,59 @@ build_server <- function(example_prompts) {
           })
         }
 
+        local({
+          idx <- i
+          vid <- verdict_id
+          output[[vid]] <- shiny::renderUI({
+            verdict_value <- state$verdicts[idx] %||% ""
+            pending <- !nzchar(trimws(verdict_value))
+            is_error <- identical(verdict_value, "Error")
+            verdict <- if (pending) "Pending" else verdict_value
+            verdict_color <- if (pending) {
+              "#616161"
+            } else if (is_error) {
+              "#b00020"
+            } else if (identical(verdict_value, "Agree")) {
+              "#1b5e20"
+            } else {
+              "#8b0000"
+            }
+
+            shiny::tags$span(
+              verdict,
+              style = paste0("color:", verdict_color, "; font-weight:700;")
+            )
+          })
+        })
+
+        local({
+          idx <- i
+          aid <- assessment_id
+          output[[aid]] <- shiny::renderUI({
+            verdict_value <- state$verdicts[idx] %||% ""
+            pending <- !nzchar(trimws(verdict_value))
+            assessment <- state$evaluations[idx] %||% ""
+
+            shiny::tags$div(
+              if (pending) "Evaluating..." else shiny::HTML(markdown::markdownToHTML(text = assessment, fragment.only = TRUE)),
+              style = "white-space:pre-wrap;"
+            )
+          })
+        })
+
         shiny::tags$div(
           style = "border:1px solid #d9d9d9; border-radius:8px; padding:12px; margin-bottom:10px;",
           shiny::tags$div(
             style = "display:flex; justify-content:space-between; align-items:center;",
             shiny::tags$strong(sprintf("Assumption %d", i)),
-            shiny::tags$span(verdict, style = paste0("color:", verdict_color, "; font-weight:700;"))
+            shiny::uiOutput(verdict_id)
           ),
           shiny::tags$div(
             style = "display:flex; gap:12px; align-items:flex-start; margin-top:8px;",
             shiny::tags$div(
               style = "flex:1; min-width:280px;",
               shiny::tags$p(assumptions[i], style = "margin-top:0px; margin-bottom:8px;"),
-              shiny::tags$div(
-                if (pending) "Evaluating..." else shiny::HTML(markdown::markdownToHTML(text = assessment, fragment.only = TRUE)),
-                style = "white-space:pre-wrap;"
-              )
+              shiny::uiOutput(assessment_id)
             ),
             shiny::tags$div(
               style = "flex:1; min-width:280px;",
