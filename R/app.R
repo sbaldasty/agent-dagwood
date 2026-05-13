@@ -68,7 +68,6 @@ build_server <- function(example_prompts) {
 
       if (inherits(config, "error")) {
         state$status <- paste("Error:", config$message)
-        shiny::showNotification(state$status, type = "error")
         return()
       }
 
@@ -77,92 +76,104 @@ build_server <- function(example_prompts) {
       state$status <- "Starting analysis..."
       state$result <- NULL
 
-      shiny::withProgress(message = "Running analysis", value = 0, {
-        result <- tryCatch(
-          analyze_scenario(user_text, progress = function(value, detail) {
-            shiny::setProgress(value = value, detail = detail)
-            state$status <- detail
-          }, config = config),
-          error = function(e) e
-        )
+      result <- tryCatch(
+        analyze_scenario(user_text, progress = function(value, detail) {
+          state$status <- detail
+        }, config = config),
+        error = function(e) e
+      )
 
-        if (inherits(result, "error")) {
-          state$status <- paste("Error:", result$message)
-          shiny::showNotification(state$status, type = "error")
-        } else {
-          if (!identical(current_run, state$run_id)) {
+      if (inherits(result, "error")) {
+        state$status <- paste("Error:", result$message)
+      } else {
+        if (!identical(current_run, state$run_id)) {
+          return()
+        }
+
+        state$result <- result
+
+        total <- length(result$assumptions)
+        if (total == 0) {
+          state$status <- "Completed. No Dagwood assumptions returned."
+          return()
+        }
+
+        state$status <- paste("Evaluating assumption 1 of", total)
+
+        evaluate_next <- function(idx) {
+          if (!identical(current_run, shiny::isolate(state$run_id))) {
             return()
           }
 
-          state$result <- result
-
-          total <- length(result$assumptions)
-          if (total == 0) {
-            state$status <- "Completed. No Dagwood assumptions returned."
+          result_snapshot <- shiny::isolate(state$result)
+          if (is.null(result_snapshot)) {
             return()
           }
 
-          state$status <- paste("Evaluating assumption 1 of", total)
-
-          evaluate_next <- function(idx) {
-            if (!identical(current_run, shiny::isolate(state$run_id))) {
-              return()
-            }
-
-            result_snapshot <- shiny::isolate(state$result)
-            if (is.null(result_snapshot)) {
-              return()
-            }
-
-            total_local <- length(result_snapshot$assumptions)
-            if (idx > total_local) {
-              shiny::isolate({
-                state$status <- paste("Completed.", total_local, "Dagwood assumptions evaluated.")
-              })
-              return()
-            }
-
+          total_local <- length(result_snapshot$assumptions)
+          if (idx > total_local) {
             shiny::isolate({
-              state$status <- paste("Evaluating assumption", idx, "of", total_local)
+              state$status <- paste("Completed.", total_local, "Dagwood assumptions evaluated.")
             })
-            assumption <- result_snapshot$assumptions[idx]
-            dag_text <- result_snapshot$parsed$dag
+            return()
+          }
 
-            assessment <- tryCatch(
-              evaluate_single_assumption(assumption, dag_text, config = config),
-              error = function(e) e
-            )
+          shiny::isolate({
+            state$status <- paste("Evaluating assumption", idx, "of", total_local)
+          })
+          assumption <- result_snapshot$assumptions[idx]
+          dag_text <- result_snapshot$parsed$dag
 
+          assessment <- tryCatch(
+            evaluate_single_assumption(assumption, dag_text, config = config),
+            error = function(e) e
+          )
+
+          if (inherits(assessment, "error")) {
             shiny::isolate({
               updated <- state$result
               if (!is.null(updated) && idx <= length(updated$evaluations) && idx <= length(updated$verdicts)) {
-                if (inherits(assessment, "error")) {
-                  updated$verdicts[idx] <- "Error"
-                  updated$evaluations[idx] <- paste("Error:", assessment$message)
-                } else {
-                  parsed_assessment <- tryCatch(
-                    parse_assessment_response(assessment),
-                    error = function(e) e
-                  )
-
-                  if (inherits(parsed_assessment, "error")) {
-                    updated$verdicts[idx] <- "Error"
-                    updated$evaluations[idx] <- paste("Error:", parsed_assessment$message)
-                  } else {
-                    updated$verdicts[idx] <- parsed_assessment$verdict
-                    updated$evaluations[idx] <- parsed_assessment$explanation
-                  }
-                }
+                updated$verdicts[idx] <- "Error"
+                updated$evaluations[idx] <- paste("Error:", assessment$message)
                 state$result <- updated
               }
+              state$status <- paste("Error:", assessment$message)
             })
-
-            later::later(function() evaluate_next(idx + 1), delay = 0)
+            return()
           }
 
-          later::later(function() evaluate_next(1), delay = 0)
+          parsed_assessment <- tryCatch(
+            parse_assessment_response(assessment),
+            error = function(e) e
+          )
+
+          if (inherits(parsed_assessment, "error")) {
+            shiny::isolate({
+              updated <- state$result
+              if (!is.null(updated) && idx <= length(updated$evaluations) && idx <= length(updated$verdicts)) {
+                updated$verdicts[idx] <- "Error"
+                updated$evaluations[idx] <- paste("Error:", parsed_assessment$message)
+                state$result <- updated
+              }
+              state$status <- paste("Error:", parsed_assessment$message)
+            })
+            return()
+          }
+
+          shiny::isolate({
+            updated <- state$result
+            if (!is.null(updated) && idx <= length(updated$evaluations) && idx <= length(updated$verdicts)) {
+              updated$verdicts[idx] <- parsed_assessment$verdict
+              updated$evaluations[idx] <- parsed_assessment$explanation
+              state$result <- updated
+            }
+          })
+
+          later::later(function() evaluate_next(idx + 1), delay = 0)
         }
-      })
+
+        later::later(function() evaluate_next(1), delay = 0)
+      }
     })
 
     output$status_text <- shiny::renderText({
@@ -171,12 +182,18 @@ build_server <- function(example_prompts) {
 
     output$graph_summary <- shiny::renderUI({
       shiny::req(state$result)
+      assumption_count <- length(state$result$assumptions)
+      assumption_label <- if (assumption_count == 1) "assumption" else "assumptions"
       summary_md <- paste0(
         "The **exposure** variable is `",
         state$result$parsed$exposure,
         "`, and the **outcome** variable is `",
         state$result$parsed$outcome,
-        "`."
+        "`. Dagwood generated **",
+        assumption_count,
+        "** ",
+        assumption_label,
+        "."
       )
       shiny::HTML(markdown::markdownToHTML(text = summary_md, fragment.only = TRUE))
     })
