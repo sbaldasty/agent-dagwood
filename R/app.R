@@ -17,7 +17,7 @@ build_ui <- function(example_prompts) {
           selected = blank_scenario,
           width = "100%"
         ),
-        shiny::textAreaInput("scenario_input", "Scenario text", value = example_prompts[[blank_scenario]], rows = 20, width = "100%"),
+        shiny::textAreaInput("scenario_input", "Scenario text", value = example_prompts[[blank_scenario]], rows = 10, width = "100%"),
         shiny::actionButton("analyze_btn", "Analyze", class = "btn-primary"),
         shiny::actionButton("clear_btn", "Clear"),
         shiny::h4("Run Status"),
