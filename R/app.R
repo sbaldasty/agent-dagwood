@@ -22,11 +22,8 @@ build_ui <- function(example_prompts) {
         shiny::actionButton("clear_btn", "Clear"),
         shiny::h4("Run Status"),
         shiny::verbatimTextOutput("status_text"),
-        shiny::h4("Graph Summary"),
-        shiny::uiOutput("graph_summary"),
-        shiny::plotOutput("root_dag_plot", height = 320),
-        shiny::h4("Dagwood Assumptions With LLM Assessments"),
-        shiny::uiOutput("assumptions_ui")
+        shiny::uiOutput("graph_summary_section"),
+        shiny::uiOutput("assumptions_section")
       )
     )
   )
@@ -165,6 +162,15 @@ build_server <- function(example_prompts) {
       state$status
     })
 
+    output$graph_summary_section <- shiny::renderUI({
+      shiny::req(state$result)
+      shiny::tagList(
+        shiny::h4("Graph Summary"),
+        shiny::uiOutput("graph_summary"),
+        shiny::plotOutput("root_dag_plot")
+      )
+    })
+
     output$graph_summary <- shiny::renderUI({
       shiny::req(state$result)
       assumption_count <- length(state$result$assumptions)
@@ -191,6 +197,14 @@ build_server <- function(example_prompts) {
         ggdag::geom_dag_text(colour = "#FFFFFF") +
         ggdag::geom_dag_label(colour = "#000000") +
         ggdag::theme_dag()
+    })
+
+    output$assumptions_section <- shiny::renderUI({
+      shiny::req(state$result)
+      shiny::tagList(
+        shiny::h4("Dagwood Assumptions With LLM Assessments"),
+        shiny::uiOutput("assumptions_ui")
+      )
     })
 
     output$assumptions_ui <- shiny::renderUI({
